@@ -31,7 +31,7 @@ The merchant-facing name is Profit Dashboard. The blueprint's working name was T
    docker run --name profit-dashboard-db -e POSTGRES_PASSWORD=profit -e POSTGRES_USER=profit -e POSTGRES_DB=profit_dashboard -p 5432:5432 -d postgres:16
    ```
 
-4. Copy the environment file and fill in the placeholders. Do not commit `.env`.
+4. Copy the environment file. It only sets the database and billing switch. Do not commit `.env`, and do not add `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `SHOPIFY_APP_URL`, or `SCOPES` to it. `shopify app dev` injects those. If they are present in `.env` with placeholder values, they override the CLI and the embedded app falls back to the public login page.
 
    ```bash
    cp .env.example .env
@@ -45,11 +45,7 @@ The merchant-facing name is Profit Dashboard. The blueprint's working name was T
    npm run setup
    ```
 
-6. Link the app to your Partner app (this writes `client_id` and the API key into the local config):
-
-   ```bash
-   shopify app config link
-   ```
+6. `shopify.app.toml` is already linked to the Partner app (`client_id` is committed, handle `profit-dashboard-214`). Do not run `shopify app config link` against a different app unless you mean to replace that file. A link can rewrite `application_url` to `https://shopify.dev/apps/default-app-home`, clear the scopes, and bump `api_version`, which makes the relative webhook URIs fail validation.
 
 7. Start the dev server and install on the development store:
 
@@ -57,19 +53,22 @@ The merchant-facing name is Profit Dashboard. The blueprint's working name was T
    shopify app dev
    ```
 
+   `shopify.web.toml` starts Prisma migrate and the React Router dev server. Without that file the CLI starts no web process.
+
 The CLI prints the install URL. After install, the app bootstraps the shop, seeds estimated gateway rules, and queues three bulk operations (orders, refunds, variant costs).
 
 ## Environment variables
 
 | Variable | Purpose |
 | --- | --- |
-| `DATABASE_URL` | PostgreSQL connection string |
-| `SHOPIFY_API_KEY` | Partner app client id |
-| `SHOPIFY_API_SECRET` | Partner app secret |
-| `SCOPES` | `read_orders,read_products,read_inventory` |
-| `SHOPIFY_APP_URL` | Tunnel URL from `shopify app dev` |
+| `DATABASE_URL` | PostgreSQL connection string. Set this in `.env` |
 | `BILLING_MODE` | `shopify_app_pricing` (default), `package`, or `manual_raw` |
-| `SHOPIFY_APP_HANDLE` | App handle used in the hosted pricing URL |
+| `SHOPIFY_APP_HANDLE` | `profit-dashboard-214`, used in the hosted pricing URL |
+| `SHOPIFY_API_KEY` | Injected by `shopify app dev`. Set it yourself only in production |
+| `SHOPIFY_API_SECRET` | Injected by `shopify app dev`. Set it yourself only in production |
+| `SCOPES` | Injected by `shopify app dev`. Production value is `read_orders,read_products,read_inventory` |
+| `SHOPIFY_APP_URL` | Injected by `shopify app dev` (the tunnel). In production this is the public https URL |
+| `DISABLE_EMBEDDED_WORKER` | Set to `1` on the web service when a separate worker process is running |
 
 `BILLING_MODE=shopify_app_pricing` sends the merchant to Shopify's hosted plan page (`https://admin.shopify.com/store/{store}/charges/{handle}/pricing_plans`). Gating still reads `currentAppInstallation.activeSubscriptions`. `package` uses `billing.request` from `@shopify/shopify-app-react-router`. `manual_raw` calls the legacy `appSubscriptionCreate` mutation. Test charges are used when `NODE_ENV` is not `production`.
 
@@ -81,10 +80,11 @@ Order queries need protected customer data access even though this app never ask
 2. Open **Protected customer data**.
 3. Request **Level 1**.
 4. Do **not** request name, email, phone, or address fields.
+5. Save the protected customer data reasons in the Partner Dashboard before you deploy. Order and refund webhook subscriptions fail validation until those reasons are saved.
 
 Scopes in `shopify.app.toml` are `read_orders`, `read_products`, and `read_inventory`. `read_all_orders` is not requested until Shopify approves it; without it, history is the last 60 days. `read_shopify_payments_payouts` is not requested. Fees come from `OrderTransaction.fees` when Shopify returns them, otherwise from a gateway rule.
 
-See [docs/PRIVACY.md](docs/PRIVACY.md).
+See [docs/PRIVACY.md](docs/PRIVACY.md). Production hosting is in [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## Plans
 

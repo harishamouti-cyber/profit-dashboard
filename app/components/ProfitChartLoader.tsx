@@ -5,8 +5,10 @@ type ChartComponent = typeof ProfitChart;
 
 export function ProfitChartLoader({
   points,
+  currency,
 }: {
   points: Array<{ date: string; revenue: number; netProfit: number }>;
+  currency: string;
 }) {
   const [Chart, setChart] = useState<ChartComponent | null>(null);
   useEffect(() => {
@@ -18,6 +20,14 @@ export function ProfitChartLoader({
       active = false;
     };
   }, []);
-  if (!Chart) return <s-paragraph>Loading chart…</s-paragraph>;
-  return <Chart points={points} />;
+  if (points.length === 0) return <s-paragraph>No daily totals in this range yet.</s-paragraph>;
+  if (!Chart) {
+    return (
+      <s-stack direction="inline" gap="small-200">
+        <s-spinner accessibilityLabel="Loading chart" />
+        <s-text color="subdued">Loading chart</s-text>
+      </s-stack>
+    );
+  }
+  return <Chart points={points} currency={currency} />;
 }

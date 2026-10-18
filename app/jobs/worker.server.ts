@@ -66,12 +66,13 @@ async function reconcileShop(shopDomain: string) {
       q: `updated_at:>'${since.toISOString()}'`,
       after,
     });
+    if (!page.orders?.nodes) break;
     for (const node of page.orders.nodes) {
       await enqueue({ shopDomain, type: "sync_order", payload: { orderGid: node.id } });
       const updated = new Date(node.updatedAt);
       if (updated > highWater) highWater = updated;
     }
-    after = page.orders.pageInfo.hasNextPage ? page.orders.pageInfo.endCursor : null;
+    after = page.orders.pageInfo?.hasNextPage ? page.orders.pageInfo.endCursor : null;
   } while (after);
 
   await db.syncJob.create({
@@ -243,7 +244,7 @@ async function ensureReconcile() {
 }
 
 export function startWorker(): void {
-  if (process.env.VITEST) return;
+  if (process.env.VITEST || process.env.DISABLE_EMBEDDED_WORKER === "1") return;
   const globalState = globalThis as { __profitDashboardWorker?: boolean };
   if (globalState.__profitDashboardWorker) return;
   globalState.__profitDashboardWorker = true;

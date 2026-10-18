@@ -25,12 +25,34 @@ export function normalizeTopic(topic: string): string {
   return topic.trim().toLowerCase();
 }
 
+export function asWebhookPayload(payload: unknown): Record<string, unknown> {
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+    return payload as Record<string, unknown>;
+  }
+  return {};
+}
+
+/** HMAC is verified by authenticate.webhook before this runs. */
+export async function handleShopifyWebhook(
+  request: Request,
+  result: { shop: string; topic: string; payload: unknown; webhookId?: string },
+): Promise<Response> {
+  const webhookId = result.webhookId || request.headers.get("X-Shopify-Webhook-Id") || "";
+  return acceptWebhook({
+    webhookId,
+    shop: result.shop,
+    topic: result.topic,
+    payload: asWebhookPayload(result.payload),
+  });
+}
+
 export async function acceptWebhook(input: {
   webhookId: string;
   shop: string;
   topic: string;
   payload: Record<string, unknown>;
 }): Promise<Response> {
+  if (!input.webhookId) return new Response(null, { status: 400 });
   const topic = normalizeTopic(input.topic);
   const fresh = await claimWebhook(input.webhookId, input.shop, topic);
   if (!fresh) return new Response();

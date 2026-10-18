@@ -2,7 +2,9 @@
   "name": "profit-dashboard",
   "private": true,
   "scripts": {
-    "build": "react-router build",
+    "build": "react-router build && npm run build:worker",
+    "build:worker": "esbuild app/jobs/standalone.ts --bundle --platform=node --format=esm --outfile=build/worker.js --packages=external",
+    "worker": "node build/worker.js",
     "dev": "shopify app dev",
     "config:link": "shopify app config link",
     "generate": "shopify app generate",
@@ -56,6 +58,7 @@
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
     "@vitest/coverage-v8": "^5.0.5",
+    "esbuild": "^0.28.2",
     "eslint": "^8.57.1",
     "eslint-import-resolver-typescript": "^4.4.4",
     "eslint-plugin-import": "^2.32.0",

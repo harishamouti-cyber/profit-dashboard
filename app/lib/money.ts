@@ -57,4 +57,11 @@ export function moneyAmount(node: unknown): Decimal {
   return D(String(amount));
 }
 
+const MONEY = /^-?\d+(\.\d+)?$/;
+
+/** True when a form value can be stored as Decimal(14,4). */
+export function isMoney(value: string | null | undefined): value is string {
+  return typeof value === "string" && MONEY.test(value.trim());
+}
+
 export type { Decimal };

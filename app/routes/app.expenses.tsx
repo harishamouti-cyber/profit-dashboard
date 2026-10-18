@@ -1,9 +1,10 @@
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Form, useActionData, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import { SaveToast } from "../components/SaveToast";
 import db from "../db.server";
 import { enqueue } from "../jobs/queue.server";
-import { D, fmt } from "../lib/money";
+import { D, fmt, isMoney } from "../lib/money";
 import { dailyShare } from "../lib/profit/expenses";
 import { getPlanLimits } from "../lib/plan.server";
 import { requireShop } from "../lib/shop.server";
@@ -74,8 +75,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const frequency = String(form.get("frequency") ?? "MONTHLY");
   const startDate = String(form.get("startDate") ?? "");
   const endDate = String(form.get("endDate") ?? "");
-  if (!name || !amount || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
-    return { message: "Name, amount, and start date are required." };
+  if (!name || !isMoney(amount) || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+    return { message: "Name, a numeric amount, and a start date (YYYY-MM-DD) are required.", errors: ["Name, a numeric amount, and a start date (YYYY-MM-DD) are required."] };
   }
   const data = {
     name,
@@ -106,7 +107,7 @@ export default function ExpensesPage() {
   return (
     <s-page heading="Expenses">
       <s-stack direction="block" gap="base">
-        {result?.message ? <s-banner tone="info" heading="Expenses">{result.message}</s-banner> : null}
+        <SaveToast message={result?.message} errors={result && "errors" in result ? result.errors : []} />
         <s-paragraph>
           {data.count} of {Number.isFinite(data.limit) ? data.limit : "unlimited"} expenses. Daily share for today is shown in {data.currency}. Monthly expenses use the number of days in that month, so February is amount/28 or amount/29.
         </s-paragraph>

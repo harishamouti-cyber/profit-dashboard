@@ -33,8 +33,14 @@ export async function streamJsonl(
   for await (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) continue;
+    let object: JsonObject;
+    try {
+      object = JSON.parse(trimmed) as JsonObject;
+    } catch {
+      continue;
+    }
     count += 1;
-    await onObject(JSON.parse(trimmed) as JsonObject);
+    await onObject(object);
   }
   return count;
 }
@@ -192,6 +198,7 @@ export async function pageRefundedOrders(
     q: `processed_at:>=${since} AND (financial_status:partially_refunded OR financial_status:refunded)`,
     after: cursor,
   });
+  if (!data.orders?.nodes) return;
   for (const node of data.orders.nodes) {
     await enqueue({ shopDomain, type: "sync_order", payload: { orderGid: node.id } });
   }
