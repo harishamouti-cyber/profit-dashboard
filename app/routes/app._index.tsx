@@ -1,10 +1,11 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useNavigation } from "react-router";
+import { Link, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { DateRangePicker } from "../components/DateRangePicker";
 import { EmptyState } from "../components/EmptyState";
 import { KpiCard } from "../components/KpiCard";
 import { ProfitChartLoader } from "../components/ProfitChartLoader";
+import { Alert, ButtonLink, Card, ExportButton, Icon, PageHeader, Pill, PremiumPage, RouteErrorBoundary } from "../components/ui";
 import db from "../db.server";
 import { periodDelta } from "../lib/delta";
 import { D, fmt, fmtMultiple, fmtRatio, sum, type Decimal } from "../lib/money";
@@ -37,7 +38,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     db.syncJob.findMany({
       where: { shopId: shop.id },
       orderBy: { createdAt: "desc" },
-      take: 5,
+      take: 20,
     }),
     db.order.count({
       where: {
@@ -74,19 +75,29 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const priorRatios = ratiosFromSums(ratioInput(prior));
   const limits = getPlanLimits(shop.plan);
   const money = (value: Decimal) => fmt(value, shop.currencyCode);
+  // Only the newest run of each sync kind matters; an old failure that was retried is not an error.
+  const seenKinds = new Set<string>();
+  const latestSync = syncJobs.filter((job) => {
+    if (seenKinds.has(job.kind)) return false;
+    seenKinds.add(job.kind);
+    return true;
+  });
+  const revenueRaw = Number(now.revenue.toFixed(2));
+  const share = (value: Decimal) => (now.revenue.gt(0) ? Math.min(100, Math.max(0, Number(value.div(now.revenue).times(100).toFixed(1))) ) : 0);
   return {
     from,
     to,
     currency: shop.currencyCode,
     historyDays: shop.historyDays,
     plan: shop.plan,
+    canExport: limits.csvExport,
     monthOrders,
     orderCount,
     orderCap: limits.ordersPerMonth,
     missingCostUnits: now.missingCostUnits,
-    syncing: syncJobs.some((job) => job.status === "RUNNING"),
-    syncFailed: syncJobs.some((job) => job.status === "FAILED"),
-    sync: syncJobs.map((job) => ({
+    syncing: latestSync.some((job) => job.status === "RUNNING"),
+    syncFailed: latestSync.some((job) => job.status === "FAILED"),
+    sync: latestSync.map((job) => ({
       kind: job.kind,
       status: job.status,
       count: job.objectCount,
@@ -107,12 +118,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       expenses: { value: money(now.expenses), ...periodDelta(now.expenses, then.expenses) },
       orders: { value: String(now.orders), ...periodDelta(D(now.orders), D(then.orders)) },
     },
+    revenueRaw,
+    netPositive: !now.netProfit.isNegative(),
     breakdown: [
-      { label: "COGS", value: money(now.cogs) },
-      { label: "Payment fees", value: money(now.paymentFees) },
-      { label: "Shipping cost", value: money(now.shippingCost) },
-      { label: "Ad spend", value: money(now.adSpend) },
-      { label: "Expenses", value: money(now.expenses) },
+      { label: "COGS", value: money(now.cogs), share: share(now.cogs) },
+      { label: "Payment fees", value: money(now.paymentFees), share: share(now.paymentFees) },
+      { label: "Shipping cost", value: money(now.shippingCost), share: share(now.shippingCost) },
+      { label: "Ad spend", value: money(now.adSpend), share: share(now.adSpend) },
+      { label: "Expenses", value: money(now.expenses), share: share(now.expenses) },
     ],
     chart: current.map((row) => ({
       date: fromDbDate(row.date),
@@ -128,167 +141,218 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       adSpend: fmt(row.adSpend, shop.currencyCode),
       expenses: fmt(row.expenses, shop.currencyCode),
       netProfit: fmt(row.netProfit, shop.currencyCode),
+      negative: D(row.netProfit).isNegative(),
     })),
   };
 };
 
+const KIND_LABEL: Record<string, string> = {
+  ORDERS_BACKFILL: "Orders",
+  REFUNDS_BACKFILL: "Refunds",
+  COSTS_BACKFILL: "Product costs",
+  INCREMENTAL: "Recent changes",
+};
+
+function fmtDay(day: string) {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
 export default function Dashboard() {
   const data = useLoaderData<typeof loader>();
-  const navigation = useNavigation();
-  const loading = navigation.state !== "idle";
-  const kpis = [
-    ["Net profit", data.kpis.netProfit],
-    ["Margin", data.kpis.margin],
-    ["Revenue", data.kpis.revenue],
-    ["COGS", data.kpis.cogs],
-    ["Ad spend", data.kpis.adSpend],
-    ["Fees", data.kpis.fees],
+  const hero = [
+    { label: "Net profit", kpi: data.kpis.netProfit, icon: "wallet", featured: true },
+    { label: "Revenue", kpi: data.kpis.revenue, icon: "trend" },
+    { label: "Margin", kpi: data.kpis.margin, icon: "percent" },
+    { label: "Orders", kpi: data.kpis.orders, icon: "cart" },
   ] as const;
-  const more = [
-    ["Shipping cost", data.kpis.shipping],
-    ["Expenses", data.kpis.expenses],
-    ["Orders", data.kpis.orders],
-    ["MER", data.kpis.mer],
+  const costs = [
+    { label: "COGS", kpi: data.kpis.cogs, invert: true },
+    { label: "Ad spend", kpi: data.kpis.adSpend, invert: true },
+    { label: "Payment fees", kpi: data.kpis.fees, invert: true },
+    { label: "Shipping", kpi: data.kpis.shipping, invert: true },
+    { label: "Expenses", kpi: data.kpis.expenses, invert: true },
+    { label: "MER", kpi: data.kpis.mer, invert: false },
   ] as const;
+  const noOrders = data.table.length === 0 && data.orderCount === 0;
+  const emptyRange = data.table.length === 0 && data.orderCount > 0;
 
   return (
     <s-page heading="Profit">
-      <s-stack direction="block" gap="base">
+      <PremiumPage>
+        <PageHeader
+          eyebrow="Profit dashboard"
+          icon="chart"
+          title="Your real profit, every day"
+          subtitle={`${fmtDay(data.from)} – ${fmtDay(data.to)} · Amounts in ${data.currency} · Compared with the previous period of the same length`}
+          actions={
+            <>
+              {data.canExport ? <ExportButton href={`/api/export/pnl?from=${data.from}&to=${data.to}`} filename={`profit-${data.from}-to-${data.to}.csv`} /> : null}
+              <ButtonLink to="/app/costs" icon="tag">Manage costs</ButtonLink>
+            </>
+          }
+        />
         <DateRangePicker from={data.from} to={data.to} />
-        {loading ? (
-          <s-stack direction="inline" gap="small-200">
-            <s-spinner accessibilityLabel="Loading profit" />
-            <s-text color="subdued">Updating this range</s-text>
-          </s-stack>
-        ) : null}
+
         {data.missingCostUnits > 0 ? (
-          <s-banner tone="warning" heading="Missing costs">
-            <s-paragraph>
-              {data.missingCostUnits} units sold without a cost.{" "}
-              <s-link href="/app/costs?missing=1">Add product costs</s-link>
-            </s-paragraph>
-          </s-banner>
-        ) : null}
-        {data.historyDays <= 60 ? (
-          <s-banner tone="info" heading="60-day history">
-            <s-paragraph>
-              Orders older than 60 days need the read_all_orders scope, which Shopify approves separately.
-            </s-paragraph>
-          </s-banner>
-        ) : null}
-        {data.plan === "STARTER" && data.monthOrders > data.orderCap ? (
-          <s-banner tone="warning" heading="Starter order count">
-            <s-paragraph>
-              {data.monthOrders} orders this month. Starter keeps counting past 300 and does not charge per order.{" "}
-              <s-link href="/app/billing">Compare plans</s-link>
-            </s-paragraph>
-          </s-banner>
-        ) : null}
-        {data.syncing ? (
-          <s-banner tone="info" heading="Sync in progress">
-            <s-paragraph>
-              {data.sync.map((job) => `${job.kind} ${job.status} (${job.count})`).join(" · ")}
-            </s-paragraph>
-          </s-banner>
+          <Alert tone="warning" title="Some sales have no product cost">
+            {data.missingCostUnits} units were sold without a cost, so profit looks higher than it is.{" "}
+            <Link to="/app/costs?missing=1">Add product costs</Link>
+          </Alert>
         ) : null}
         {data.syncFailed ? (
-          <s-banner tone="critical" heading="A sync failed">
-            <s-paragraph>
-              {data.sync
-                .filter((job) => job.status === "FAILED")
-                .map((job) => `${job.kind}${job.error ? `: ${job.error}` : ""}`)
-                .join(" · ")}{" "}
-              <s-link href="/app/settings">Resync from settings</s-link>
-            </s-paragraph>
-          </s-banner>
+          <Alert tone="critical" title="A sync did not finish">
+            {data.sync
+              .filter((job) => job.status === "FAILED")
+              .map((job) => `${KIND_LABEL[job.kind] ?? job.kind}${job.error ? `: ${job.error}` : ""}`)
+              .join(" · ")}{" "}
+            <Link to="/app/settings">Resync from Settings</Link>
+          </Alert>
         ) : null}
-        {data.table.length === 0 && data.orderCount === 0 ? (
-          <EmptyState
-            heading="No orders yet"
-            icon="chart-popular"
-            body="Profit shows up after the first order sync. Add product costs so COGS is not zero."
-            href="/app/costs"
-            action="Add product costs"
-          />
+        {data.syncing ? (
+          <Alert tone="info" title="Importing your store data">
+            {data.sync
+              .filter((job) => job.status === "RUNNING")
+              .map((job) => `${KIND_LABEL[job.kind] ?? job.kind}${job.count ? ` (${job.count})` : ""}`)
+              .join(" · ")}
+            . Numbers fill in automatically, usually within a few minutes.
+          </Alert>
         ) : null}
-        {data.table.length === 0 && data.orderCount > 0 ? (
-          <EmptyState
-            heading="Nothing in this range"
-            icon="calendar"
-            body="Orders exist, but none of them land in these dates. Try a wider range."
-            href="?preset=30d"
-            action="Show the last 30 days"
-          />
+        {data.plan === "STARTER" && data.monthOrders > data.orderCap ? (
+          <Alert tone="info" title="You passed 300 orders this month">
+            {data.monthOrders} orders so far. Starter keeps counting and never charges per order, but Growth adds CSV imports and the full product table.{" "}
+            <Link to="/app/billing">Compare plans</Link>
+          </Alert>
         ) : null}
-        <s-grid gridTemplateColumns="repeat(auto-fit, minmax(180px, 1fr))" gap="base">
-          {kpis.map(([label, kpi]) => (
-            <KpiCard key={label} label={label} value={kpi.value} delta={kpi.text} tone={kpi.tone} hint="vs previous period" />
+
+        {noOrders ? (
+          <Card>
+            <EmptyState
+              heading="Your first profit numbers are on the way"
+              icon="chart-popular"
+              body="Orders from the last 60 days import automatically after install. While that runs, add product costs so every sale has an accurate margin."
+              href="/app/costs"
+              action="Add product costs"
+            />
+          </Card>
+        ) : null}
+
+        <div className="pd-grid pd-g4">
+          {hero.map((item) => (
+            <KpiCard
+              key={item.label}
+              label={item.label}
+              value={item.kpi.value}
+              delta={item.kpi.text}
+              tone={item.kpi.tone}
+              icon={item.icon}
+              featured={"featured" in item && item.featured}
+            />
           ))}
-        </s-grid>
-        <s-grid gridTemplateColumns="repeat(auto-fit, minmax(180px, 1fr))" gap="base">
-          {more.map(([label, kpi]) => (
-            <KpiCard key={label} label={label} value={kpi.value} delta={kpi.text} tone={kpi.tone} />
+        </div>
+        <div className="pd-grid pd-g6">
+          {costs.map((item) => (
+            <KpiCard key={item.label} label={item.label} value={item.kpi.value} delta={item.kpi.text} tone={item.kpi.tone} invert={item.invert} hint="" small />
           ))}
-        </s-grid>
-        <s-section heading="Profit over time">
-          <ProfitChartLoader points={data.chart} currency={data.currency} />
-        </s-section>
-        <s-section heading="Cost breakdown">
-          <s-paragraph>Costs subtracted from revenue in this range. Amounts are in {data.currency}.</s-paragraph>
-          <s-table>
-            <s-table-header-row>
-              <s-table-header>Cost</s-table-header>
-              <s-table-header>Amount</s-table-header>
-            </s-table-header-row>
-            <s-table-body>
-              {data.breakdown.map((row) => (
-                <s-table-row key={row.label}>
-                  <s-table-cell>{row.label}</s-table-cell>
-                  <s-table-cell>{row.value}</s-table-cell>
-                </s-table-row>
+        </div>
+
+        <div className="pd-grid pd-main">
+          <Card
+            title="Profit over time"
+            icon="trend"
+            subtitle="Daily net profit (bars) against revenue (line)"
+            actions={
+              <div className="pd-legend">
+                <span><i style={{ background: "linear-gradient(135deg,#4f46e5,#06b6d4)" }} />Net profit</span>
+                <span><i style={{ background: "#0b0d12" }} />Revenue</span>
+              </div>
+            }
+          >
+            {emptyRange ? (
+              <EmptyState
+                heading="Nothing in this range"
+                icon="calendar"
+                body="You have orders, but none fall between these dates. Try a wider range."
+                href="?preset=30d"
+                action="Show the last 30 days"
+              />
+            ) : (
+              <ProfitChartLoader points={data.chart} currency={data.currency} />
+            )}
+          </Card>
+          <Card title="Where the money goes" icon="layers" subtitle="Each cost as a share of revenue">
+            <div className="pd-brk">
+              {data.breakdown.map((item) => (
+                <div key={item.label} className="pd-brk-row">
+                  <div className="pd-brk-top">
+                    <span>{item.label}</span>
+                    <span><b>{item.value}</b> <span className="pd-muted pd-small">{data.revenueRaw > 0 ? `${item.share}%` : ""}</span></span>
+                  </div>
+                  <div className="pd-bar"><i style={{ width: `${item.share}%` }} /></div>
+                </div>
               ))}
-            </s-table-body>
-          </s-table>
-        </s-section>
-        <s-section heading="Daily P&L">
+              <div className="pd-brk-top" style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+                <span className="strong">Net profit</span>
+                <b className={data.netPositive ? "pd-pos" : "pd-neg"}>{data.kpis.netProfit.value}</b>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        <Card
+          title="Daily profit and loss"
+          icon="receipt"
+          flush
+          subtitle="One row per day in your store's time zone"
+          footer="Margin and MER use the totals of this range, not an average of daily ratios. Tax, duties, tips, and gift card sales stay out of revenue."
+        >
           {data.table.length === 0 ? (
-            <s-paragraph>The daily table fills in after orders are imported.</s-paragraph>
+            <div style={{ padding: "26px 22px" }} className="pd-muted">No days to show yet.</div>
           ) : (
-            <s-table>
-              <s-table-header-row>
-                <s-table-header>Date</s-table-header>
-                <s-table-header>Orders</s-table-header>
-                <s-table-header>Revenue</s-table-header>
-                <s-table-header>COGS</s-table-header>
-                <s-table-header>Fees</s-table-header>
-                <s-table-header>Ad spend</s-table-header>
-                <s-table-header>Expenses</s-table-header>
-                <s-table-header>Net profit</s-table-header>
-              </s-table-header-row>
-              <s-table-body>
-                {data.table.map((row) => (
-                  <s-table-row key={row.date}>
-                    <s-table-cell>{row.date}</s-table-cell>
-                    <s-table-cell>{row.orders}</s-table-cell>
-                    <s-table-cell>{row.revenue}</s-table-cell>
-                    <s-table-cell>{row.cogs}</s-table-cell>
-                    <s-table-cell>{row.fees}</s-table-cell>
-                    <s-table-cell>{row.adSpend}</s-table-cell>
-                    <s-table-cell>{row.expenses}</s-table-cell>
-                    <s-table-cell>{row.netProfit}</s-table-cell>
-                  </s-table-row>
-                ))}
-              </s-table-body>
-            </s-table>
+            <div className="pd-table-wrap">
+              <table className="pd-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th className="r">Orders</th>
+                    <th className="r">Revenue</th>
+                    <th className="r">COGS</th>
+                    <th className="r">Fees</th>
+                    <th className="r">Ad spend</th>
+                    <th className="r">Expenses</th>
+                    <th className="r">Net profit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.table.map((row) => (
+                    <tr key={row.date}>
+                      <td className="strong">{fmtDay(row.date)}</td>
+                      <td className="r">{row.orders}</td>
+                      <td className="r">{row.revenue}</td>
+                      <td className="r pd-muted">{row.cogs}</td>
+                      <td className="r pd-muted">{row.fees}</td>
+                      <td className="r pd-muted">{row.adSpend}</td>
+                      <td className="r pd-muted">{row.expenses}</td>
+                      <td className="r"><Pill tone={row.negative ? "critical" : "success"}>{row.netProfit}</Pill></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
-          <s-paragraph>
-            Margin and MER use the sums of this range, not an average of daily ratios. Tax, duties, tips, and gift card sales stay out of revenue.
-          </s-paragraph>
-        </s-section>
-      </s-stack>
+        </Card>
+
+        {data.historyDays <= 60 ? (
+          <p className="pd-muted pd-small" style={{ display: "flex", gap: 6, alignItems: "center", margin: 0 }}>
+            <Icon name="info" size={13} />History covers the last 60 days. Older orders need extra access that Shopify approves separately.
+          </p>
+        ) : null}
+      </PremiumPage>
     </s-page>
   );
 }
+
+export const ErrorBoundary = RouteErrorBoundary;
 
 export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);

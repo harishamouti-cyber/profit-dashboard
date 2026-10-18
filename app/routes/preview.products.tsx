@@ -1,3 +1,4 @@
+import { PremiumPage } from "../components/ui";
 const rows = [
   ["Heavyweight tee", "42", "1", "$1,260.00", "$420.00", "$48.00", "$792.00", "success", "Good 62.9%", "Costed"],
   ["Canvas tote", "18", "0", "$540.00", "$216.00", "$22.00", "$302.00", "success", "Good 55.9%", "Costed"],
@@ -8,6 +9,7 @@ const rows = [
 export default function PreviewProducts() {
   return (
     <s-page heading="Product profit">
+      <PremiumPage>
       <s-stack direction="block" gap="base">
         <s-paragraph>Ad spend and expenses are not allocated to products. Amounts are in USD.</s-paragraph>
         <s-search-field label="Search products" value="tee" />
@@ -40,6 +42,7 @@ export default function PreviewProducts() {
           </s-table-body>
         </s-table>
       </s-stack>
+      </PremiumPage>
     </s-page>
   );
 }

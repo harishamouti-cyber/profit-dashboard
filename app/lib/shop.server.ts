@@ -42,9 +42,9 @@ export async function loadShop(
 }
 
 export async function requireShop(request: Request) {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session, redirect } = await authenticate.admin(request);
   const shop = await loadShop(admin, session.shop, session.scope);
-  return { admin, session, shop };
+  return { admin, session, shop, redirect };
 }
 
 export async function requireFreshShop(request: Request) {

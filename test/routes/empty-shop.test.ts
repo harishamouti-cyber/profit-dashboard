@@ -10,6 +10,7 @@ vi.mock("../../app/shopify.server", () => ({
         },
       },
       session: { shop: "empty-shop.myshopify.com", scope: "read_orders,read_products,read_inventory" },
+      redirect: (url: string) => new Response(null, { status: 302, headers: { Location: url } }),
     }),
     webhook: async () => {
       throw new Error("unused");
@@ -93,7 +94,11 @@ describe("pages with an empty shop", () => {
     expect(start.doneCount).toBe(0);
     expect(start.steps).toHaveLength(4);
 
-    const layout = await appLayout(args("/app"));
+    // No subscription yet: the layout sends the merchant to the plan page.
+    const paywall = await appLayout(args("/app")).catch((thrown: unknown) => thrown);
+    expect(paywall).toBeInstanceOf(Response);
+    expect((paywall as Response).headers.get("Location")).toBe("/app/billing");
+    const layout = await appLayout(args("/app/billing"));
     expect(layout.plan).toBe("NONE");
 
     const marketing = await landing(args("/"));
@@ -106,7 +111,7 @@ describe("pages with an empty shop", () => {
 
   it("still returns a shop when bootstrap cannot reach Shopify", async () => {
     await redactShop(db, domain);
-    const layout = await appLayout(args("/app"));
+    const layout = await appLayout(args("/app/billing"));
     expect(layout.plan).toBe("NONE");
     const shop = await db.shop.findUnique({ where: { shopDomain: domain } });
     expect(shop).not.toBeNull();
