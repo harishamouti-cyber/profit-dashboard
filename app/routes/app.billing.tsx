@@ -12,7 +12,7 @@ import { authenticate } from "../shopify.server";
 const FEATURES: Record<BillingPlanName, string[]> = {
   Starter: ["Dashboard and daily P&L", "Up to 300 orders a month counted", "3 expenses", "Top 10 products", "No per-order fees"],
   Growth: ["Unlimited orders and expenses", "Cost and ad spend CSV", "Recalculate cost history", "Full product table and exports", "No per-order fees"],
-  Pro: ["Everything in Growth", "Shipping CSV and SKU fallback costs", "Custom gateway rules", "Weekly P&L digest", "No per-order fees"],
+  Pro: ["Everything in Growth", "Shipping CSV and SKU fallback costs", "Custom gateway rules", "No per-order fees"],
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -71,7 +71,6 @@ const COMPARE: Array<{ label: string; values: [string | boolean, string | boolea
   { label: "Recalculate cost history", values: [false, true, true] },
   { label: "Shipping CSV and SKU fallback costs", values: [false, false, true] },
   { label: "Custom payment gateway fees", values: [false, false, true] },
-  { label: "Weekly profit digest", values: [false, false, true] },
 ];
 
 const FAQ = [

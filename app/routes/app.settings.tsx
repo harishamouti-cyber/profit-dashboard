@@ -202,15 +202,9 @@ export default function SettingsPage() {
           <input type="hidden" name="intent" value="resync" />
           <s-button type="submit">Resync all</s-button>
         </Form>
-        {data.canDigest ? (
-          <Form method="post">
-            <input type="hidden" name="intent" value="digest" />
-            <s-button type="submit" variant="secondary">Send weekly digest (stub)</s-button>
-          </Form>
-        ) : null}
         <s-section heading="Data and privacy">
           <s-paragraph>
-            Profit Dashboard stores orders, refunds, and catalog costs without buyer name, contact, or address fields. See docs/PRIVACY.md. Protected customer data access is Level 1 only: do not request name, contact, or address fields in the Partner Dashboard.
+            Profit Dashboard stores order totals, refunds, and product costs only. It never stores your customers&apos; names, emails, phone numbers, or addresses. Your store&apos;s data is deleted 48 hours after you uninstall the app.
           </s-paragraph>
         </s-section>
       </s-stack>
