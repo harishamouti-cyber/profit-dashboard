@@ -1,7 +1,7 @@
 # This file stores configurations for your Shopify app.
 client_id = "6474e91891fa0d5cd17324e435e39220"
 name = "Penni: Net Profit Tracker"
-application_url = "https://example.com"
+application_url = "https://penni-app.netlify.app"
 embedded = true
 
 [build]
@@ -12,7 +12,7 @@ include_config_on_deploy = true
 scopes = "read_orders,read_products,read_inventory"
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ "https://penni-app.netlify.app/auth/callback", "https://penni-app.netlify.app/api/auth" ]
 
 [webhooks]
 api_version = "2026-10"

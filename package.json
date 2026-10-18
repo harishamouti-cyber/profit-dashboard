@@ -27,6 +27,7 @@
     "node": ">=22.15"
   },
   "dependencies": {
+    "@netlify/vite-plugin-react-router": "^4.0.0",
     "@prisma/client": "^6.19.0",
     "@react-router/dev": "7.18.2",
     "@react-router/fs-routes": "7.18.2",
@@ -49,6 +50,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@netlify/functions": "^6.0.2",
     "@shopify/api-codegen-preset": "^2.0.0",
     "@shopify/polaris-types": "1.0.1",
     "@types/eslint": "^9.6.1",

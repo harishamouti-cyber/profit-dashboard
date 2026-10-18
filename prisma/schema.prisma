@@ -4,12 +4,16 @@
 // Template ships SQLite; we use PostgreSQL for production (Decimal + concurrency).
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // rhel-openssl-3.0.x = Netlify Functions (AWS Lambda, Node 22).
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url       = env("DATABASE_URL")
+  // Migrations need a direct (non-pooled) connection. Locally this is the same URL as DATABASE_URL.
+  directUrl = env("DIRECT_URL")
 }
 
 model Session {

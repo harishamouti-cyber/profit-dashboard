@@ -68,7 +68,7 @@ The CLI prints the install URL. After install, the app bootstraps the shop, seed
 | `SHOPIFY_API_SECRET` | Injected by `shopify app dev`. Set it yourself only in production |
 | `SCOPES` | Injected by `shopify app dev`. Production value is `read_orders,read_products,read_inventory` |
 | `SHOPIFY_APP_URL` | Injected by `shopify app dev` (the tunnel). In production this is the public https URL |
-| `DISABLE_EMBEDDED_WORKER` | Set to `1` on the web service when a separate worker process is running |
+| `DISABLE_EMBEDDED_WORKER` | `1` in production on Netlify (jobs run in Netlify background functions, see docs/DEPLOY.md). Unset for local dev |
 
 `BILLING_MODE=shopify_app_pricing` sends the merchant to Shopify's hosted plan page (`https://admin.shopify.com/store/{store}/charges/{handle}/pricing_plans`). Gating still reads `currentAppInstallation.activeSubscriptions`. `package` uses `billing.request` from `@shopify/shopify-app-react-router`. `manual_raw` calls the legacy `appSubscriptionCreate` mutation. Test charges are used when `NODE_ENV` is not `production`.
 

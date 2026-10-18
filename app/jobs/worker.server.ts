@@ -204,17 +204,19 @@ async function dispatch(job: Job): Promise<void> {
   }
 }
 
-export async function pollOnce(): Promise<void> {
+/** Runs at most one due job. Returns false when there was nothing to run. Safe to call concurrently. */
+export async function pollOnce(): Promise<boolean> {
   const job = await db.job.findFirst({
     where: { status: "PENDING", runAt: { lte: new Date() } },
     orderBy: { runAt: "asc" },
   });
-  if (!job) return;
+  if (!job) return false;
   const claimed = await db.job.updateMany({
     where: { id: job.id, status: "PENDING" },
     data: { status: "RUNNING", attempts: { increment: 1 } },
   });
-  if (claimed.count === 0) return;
+  // Another runner claimed it first; report progress so the caller keeps draining.
+  if (claimed.count === 0) return true;
   try {
     await dispatch(job);
     await db.job.update({ where: { id: job.id }, data: { status: "SUCCEEDED", lastError: null } });
@@ -233,7 +235,12 @@ export async function pollOnce(): Promise<void> {
             },
     });
   }
+  return true;
 }
+
+const RECONCILE_EVERY_MS = 15 * 60 * 1000;
+// Longer than the 15-minute Netlify background function limit, so a live runner is never interrupted.
+const STALE_RUNNING_MS = 20 * 60 * 1000;
 
 async function ensureReconcile() {
   const pending = await db.job.count({
@@ -241,6 +248,64 @@ async function ensureReconcile() {
   });
   if (pending > 0) return;
   await enqueue({ shopDomain: "*", type: "reconcile_all", payload: {} });
+}
+
+/** Enqueue reconcile_all only if none is queued and the last one is older than 15 minutes. */
+async function ensureReconcileDue() {
+  const last = await db.job.findFirst({
+    where: { type: "reconcile_all" },
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true },
+  });
+  if (last && Date.now() - last.createdAt.getTime() < RECONCILE_EVERY_MS) return;
+  await ensureReconcile();
+}
+
+/** A runner that was killed mid-job leaves it RUNNING. Put such jobs back in the queue. */
+async function recoverStaleJobs() {
+  const cutoff = new Date(Date.now() - STALE_RUNNING_MS);
+  const stale = await db.job.findMany({
+    where: { status: "RUNNING", updatedAt: { lt: cutoff } },
+    select: { id: true, attempts: true },
+  });
+  for (const job of stale) {
+    await db.job.updateMany({
+      where: { id: job.id, status: "RUNNING", updatedAt: { lt: cutoff } },
+      data:
+        job.attempts >= MAX_ATTEMPTS
+          ? { status: "FAILED", lastError: "runner timed out" }
+          : { status: "PENDING", lastError: "runner timed out", runAt: new Date() },
+    });
+  }
+  return stale.length;
+}
+
+/**
+ * Serverless job runner (Netlify background function). Drains due jobs until the queue is empty
+ * or the time budget runs out. Idempotent and safe to run in several invocations at once:
+ * jobs are claimed with a conditional update, so each job runs once.
+ */
+export async function runJobsBatch(options: { budgetMs: number; maxJobs?: number }) {
+  const startedAt = Date.now();
+  (globalThis as { __penniJobsRunnerActive?: boolean }).__penniJobsRunnerActive = true;
+  try {
+    return await drain(startedAt, options);
+  } finally {
+    (globalThis as { __penniJobsRunnerActive?: boolean }).__penniJobsRunnerActive = false;
+  }
+}
+
+async function drain(startedAt: number, options: { budgetMs: number; maxJobs?: number }) {
+  const recovered = await recoverStaleJobs();
+  await ensureReconcileDue();
+  let processed = 0;
+  const maxJobs = options.maxJobs ?? 500;
+  while (Date.now() - startedAt < options.budgetMs && processed < maxJobs) {
+    const didWork = await pollOnce();
+    if (!didWork) break;
+    processed += 1;
+  }
+  return { processed, recovered, ms: Date.now() - startedAt };
 }
 
 export function startWorker(): void {

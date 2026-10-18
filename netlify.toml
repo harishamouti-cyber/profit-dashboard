@@ -1,0 +1,14 @@
+# Netlify (free plan) deploy. React Router SSR runs as a Netlify Function via
+# @netlify/vite-plugin-react-router; background jobs run in netlify/functions.
+[build]
+  command = "npx prisma generate && npx prisma migrate deploy && npm run build"
+  publish = "build/client"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[functions]
+  node_bundler = "esbuild"
+  # Prisma's query engine is a native file the bundler cannot trace; ship it with every function.
+  included_files = ["node_modules/.prisma/client/*.node", "node_modules/.prisma/client/schema.prisma"]
+  external_node_modules = ["@prisma/client", ".prisma"]
