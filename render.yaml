@@ -1,29 +1,25 @@
-# Render blueprint: one web service, one worker, one Postgres database.
-# The web process serves HTTP. The worker runs the job poll and the 15-minute reconcile.
-# Web sets DISABLE_EMBEDDED_WORKER=1 so a scaled web service does not run two queues.
-
-databases:
-  - name: profit-dashboard-db
-    databaseName: profit_dashboard
-    plan: basic-256mb
+# Render blueprint: one FREE web service. The database is external (Neon free Postgres).
+# The web process serves HTTP and also runs the embedded job loop and the 15-minute reconcile
+# (DISABLE_EMBEDDED_WORKER is intentionally NOT set). Do not scale this service past one instance
+# unless you add a separate worker and set DISABLE_EMBEDDED_WORKER=1 on web.
+# Migrations run on container start (npm run docker-start -> prisma migrate deploy).
+# Use Neon's DIRECT (non "-pooler") connection string for DATABASE_URL so prisma migrate works.
 
 services:
   - type: web
-    name: profit-dashboard
+    name: penni
     runtime: docker
+    plan: free
+    region: ohio
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
+    autoDeploy: true
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: profit-dashboard-db
-          property: connectionString
-      - key: DISABLE_EMBEDDED_WORKER
-        value: "1"
+        sync: false
       - key: NODE_ENV
         value: production
-      # manual_raw matches "Manual pricing" in the Partner Dashboard. Use shopify_app_pricing
-      # only if you switch the app to Shopify App Pricing and create the plans there.
+      # manual_raw matches "Manual pricing" in the Partner Dashboard.
       - key: BILLING_MODE
         value: manual_raw
       - key: SHOPIFY_APP_HANDLE
@@ -32,29 +28,6 @@ services:
         sync: false
       - key: SHOPIFY_API_SECRET
         sync: false
-      - key: SHOPIFY_APP_URL
-        sync: false
-      - key: SCOPES
-        value: read_orders,read_products,read_inventory
-
-  - type: worker
-    name: profit-dashboard-worker
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    # The web service runs migrations on start (npm run docker-start). The worker only polls jobs.
-    dockerCommand: node build/worker.js
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: profit-dashboard-db
-          property: connectionString
-      - key: NODE_ENV
-        value: production
-      - key: SHOPIFY_API_KEY
-        sync: false
-      - key: SHOPIFY_API_SECRET
-        sync: false
-      # Required: shopifyApp() refuses to start without a valid app URL, even in the worker.
       - key: SHOPIFY_APP_URL
         sync: false
       - key: SCOPES
