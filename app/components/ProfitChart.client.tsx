@@ -23,20 +23,20 @@ export function ProfitChart({
         <ComposedChart data={points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="pdBar" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.95} />
-              <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.75} />
+              <stop offset="0%" stopColor="#0b0d12" stopOpacity={0.92} />
+              <stop offset="100%" stopColor="#3f4350" stopOpacity={0.8} />
             </linearGradient>
           </defs>
           <CartesianGrid stroke="#eef0f4" vertical={false} />
           <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#5c6170" }} tickLine={false} axisLine={false} tickFormatter={(d: string) => d.slice(5)} minTickGap={16} />
           <YAxis tick={{ fontSize: 11, fill: "#5c6170" }} tickLine={false} axisLine={false} width={44} tickFormatter={short} />
           <Tooltip
-            cursor={{ fill: "rgba(79,70,229,.06)" }}
+            cursor={{ fill: "rgba(11,13,18,.06)" }}
             contentStyle={{ borderRadius: 12, border: "1px solid #e6e8ee", boxShadow: "0 10px 30px -12px rgba(16,24,40,.25)", fontFamily: "Inter, system-ui, sans-serif", fontSize: 12 }}
             formatter={(value) => [`${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`, undefined]}
           />
           <Bar dataKey="netProfit" name="Net profit" fill="url(#pdBar)" radius={[6, 6, 2, 2]} maxBarSize={28} />
-          <Line dataKey="revenue" name="Revenue" stroke="#0b0d12" strokeWidth={2} dot={false} activeDot={{ r: 4 }} type="monotone" />
+          <Line dataKey="revenue" name="Revenue" stroke="#98a2b3" strokeWidth={2} dot={false} activeDot={{ r: 4 }} type="monotone" />
         </ComposedChart>
       </ResponsiveContainer>
     </div>

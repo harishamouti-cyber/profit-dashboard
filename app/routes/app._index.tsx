@@ -263,7 +263,7 @@ export default function Dashboard() {
             subtitle="Daily net profit (bars) against revenue (line)"
             actions={
               <div className="pd-legend">
-                <span><i style={{ background: "linear-gradient(135deg,#4f46e5,#06b6d4)" }} />Net profit</span>
+                <span><i style={{ background: "linear-gradient(135deg,#0b0d12,#2b2f38)" }} />Net profit</span>
                 <span><i style={{ background: "#0b0d12" }} />Revenue</span>
               </div>
             }

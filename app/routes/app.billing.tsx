@@ -81,16 +81,16 @@ const FAQ = [
 ];
 
 const CSS = `
-.pp{--ink:#0b0d12;--muted:#5c6170;--line:#e6e8ee;--brand:#4f46e5;--brand2:#06b6d4;font-family:Inter,system-ui,sans-serif;color:var(--ink)}
+.pp{--ink:#0b0d12;--muted:#5c6170;--line:#e6e8ee;--brand:#0b0d12;--brand2:#2b2f38;font-family:Inter,system-ui,sans-serif;color:var(--ink)}
 .pp-hero{text-align:center;padding:12px 0 8px}
-.pp-eyebrow{display:inline-flex;gap:6px;align-items:center;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--brand);background:#eef2ff;border-radius:999px;padding:6px 12px}
+.pp-eyebrow{display:inline-flex;gap:6px;align-items:center;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--brand);background:#f2f4f7;border-radius:999px;padding:6px 12px}
 .pp-title{font-size:30px;line-height:1.15;font-weight:700;letter-spacing:-.02em;margin:14px 0 8px}
 .pp-sub{color:var(--muted);font-size:15px;margin:0 auto;max-width:520px}
 .pp-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:28px;align-items:stretch}
 @media (max-width:900px){.pp-grid{grid-template-columns:1fr}}
 .pp-card{position:relative;background:#fff;border:1px solid var(--line);border-radius:18px;padding:26px 24px;display:flex;flex-direction:column;box-shadow:0 1px 2px rgba(16,24,40,.04);transition:transform .2s ease,box-shadow .2s ease}
 .pp-card:hover{transform:translateY(-3px);box-shadow:0 14px 34px -12px rgba(16,24,40,.18)}
-.pp-card.featured{border:1.5px solid transparent;background:linear-gradient(#fff,#fff) padding-box,linear-gradient(135deg,var(--brand),var(--brand2)) border-box;box-shadow:0 20px 44px -18px rgba(79,70,229,.45)}
+.pp-card.featured{border:1.5px solid transparent;background:linear-gradient(#fff,#fff) padding-box,linear-gradient(135deg,var(--brand),var(--brand2)) border-box;box-shadow:0 20px 44px -18px rgba(11,13,18,.45)}
 .pp-ribbon{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:5px 12px;border-radius:999px;white-space:nowrap}
 .pp-head{display:flex;justify-content:space-between;align-items:center}
 .pp-name{font-size:16px;font-weight:650}
@@ -103,12 +103,12 @@ const CSS = `
 .pp-btn{margin:20px 0 22px;width:100%;border:0;border-radius:12px;padding:12px 16px;font:600 14px Inter,system-ui,sans-serif;cursor:pointer;transition:filter .15s ease,transform .15s ease}
 .pp-btn:active{transform:scale(.98)}
 .pp-btn.dark{background:var(--ink);color:#fff}
-.pp-btn.grad{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;box-shadow:0 8px 20px -8px rgba(79,70,229,.6)}
+.pp-btn.grad{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;box-shadow:0 8px 20px -8px rgba(11,13,18,.6)}
 .pp-btn:hover{filter:brightness(1.08)}
 .pp-btn[disabled]{background:#f2f4f7;color:#98a2b3;box-shadow:none;cursor:default;filter:none}
 .pp-list{list-style:none;padding:0;margin:0;display:grid;gap:11px;border-top:1px solid var(--line);padding-top:20px}
 .pp-list li{display:flex;gap:10px;font-size:14px;align-items:flex-start}
-.pp-check{flex:none;width:18px;height:18px;border-radius:50%;background:#eef2ff;color:var(--brand);display:grid;place-items:center;margin-top:1px}
+.pp-check{flex:none;width:18px;height:18px;border-radius:50%;background:#f2f4f7;color:var(--brand);display:grid;place-items:center;margin-top:1px}
 .pp-trust{display:flex;flex-wrap:wrap;justify-content:center;gap:10px 26px;margin:26px 0 6px;color:var(--muted);font-size:13px}
 .pp-trust span{display:inline-flex;align-items:center;gap:7px}
 .pp-sec{margin-top:34px;background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden}
@@ -117,7 +117,7 @@ const CSS = `
 .pp-table th,.pp-table td{padding:13px 22px;text-align:center;border-bottom:1px solid #f1f2f5}
 .pp-table th:first-child,.pp-table td:first-child{text-align:left;color:var(--ink)}
 .pp-table thead th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
-.pp-table .hl{background:#f8f8ff}
+.pp-table .hl{background:#f9fafb}
 .pp-table tr:last-child td{border-bottom:0}
 .pp-no{color:#c4c8d2}
 .pp-faq{display:grid;grid-template-columns:repeat(3,1fr);gap:0}

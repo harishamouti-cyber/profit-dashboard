@@ -7,7 +7,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
  * so nothing leaks into Polaris web components.
  */
 export const PREMIUM_CSS = `
-.pd{--ink:#0b0d12;--muted:#5c6170;--line:#e6e8ee;--soft:#f6f7fb;--brand:#4f46e5;--brand2:#06b6d4;--good:#067647;--goodbg:#dcfae6;--bad:#b42318;--badbg:#fee4e2;--warn:#b54708;--warnbg:#fef0c7;--info:#3538cd;--infobg:#eef2ff;font-family:Inter,system-ui,-apple-system,sans-serif;color:var(--ink);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.pd{--ink:#0b0d12;--muted:#5c6170;--line:#e6e8ee;--soft:#f6f7fb;--brand:#0b0d12;--brand2:#2b2f38;--good:#067647;--goodbg:#dcfae6;--bad:#b42318;--badbg:#fee4e2;--warn:#b54708;--warnbg:#fef0c7;--info:#3538cd;--infobg:#f2f4f7;font-family:Inter,system-ui,-apple-system,sans-serif;color:var(--ink);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
 .pd *{box-sizing:border-box}
 .pd a{color:inherit}
 .pd-stack{display:grid;gap:18px}
@@ -38,7 +38,7 @@ export const PREMIUM_CSS = `
 .pd-kpi.sm{min-height:0;padding:14px 16px}
 .pd-kpi.sm .pd-kpi-v{font-size:19px}
 .pd-kpi-f{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:12px;margin-top:auto}
-.pd-kpi.feat{border:1.5px solid transparent;background:linear-gradient(#fff,#fff) padding-box,linear-gradient(135deg,var(--brand),var(--brand2)) border-box;box-shadow:0 18px 40px -22px rgba(79,70,229,.55)}
+.pd-kpi.feat{border:1.5px solid transparent;background:linear-gradient(#fff,#fff) padding-box,linear-gradient(135deg,var(--brand),var(--brand2)) border-box;box-shadow:0 18px 40px -22px rgba(11,13,18,.55)}
 .pd-kpi.feat .pd-kpi-v{background:linear-gradient(135deg,var(--brand),var(--brand2));-webkit-background-clip:text;background-clip:text;color:transparent}
 .pd-pill{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:650;border-radius:999px;padding:3px 9px;white-space:nowrap;background:var(--soft);color:var(--muted)}
 .pd-pill.success{background:var(--goodbg);color:var(--good)}
@@ -47,7 +47,7 @@ export const PREMIUM_CSS = `
 .pd-pill.info{background:var(--infobg);color:var(--info)}
 .pd-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid transparent;border-radius:11px;padding:9px 15px;font:600 13.5px Inter,system-ui,sans-serif;cursor:pointer;text-decoration:none;white-space:nowrap;transition:filter .15s ease,transform .15s ease,background .15s ease}
 .pd-btn:active{transform:scale(.98)}
-.pd-btn.primary{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;box-shadow:0 8px 20px -10px rgba(79,70,229,.7)}
+.pd-btn.primary{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;box-shadow:0 8px 20px -10px rgba(11,13,18,.7)}
 .pd-btn.dark{background:var(--ink);color:#fff}
 .pd-btn.ghost{background:#fff;border-color:var(--line);color:var(--ink)}
 .pd-btn.ghost:hover{background:var(--soft)}
@@ -64,7 +64,7 @@ export const PREMIUM_CSS = `
 .pd-dates{display:inline-flex;gap:6px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:12px;padding:3px 4px 3px 10px}
 .pd-dates span{color:var(--muted);font-size:12px}
 .pd-input{font:500 13.5px Inter,system-ui,sans-serif;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px 11px;background:#fff;outline:none;min-width:0}
-.pd-input:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(79,70,229,.15)}
+.pd-input:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(11,13,18,.15)}
 .pd-dates .pd-input{border:0;padding:6px 4px;box-shadow:none}
 .pd-search{position:relative;flex:1;min-width:200px;max-width:380px}
 .pd-search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted)}
@@ -100,10 +100,10 @@ select.pd-input{appearance:none;background-image:linear-gradient(45deg,transpare
 .pd-alert.critical{background:#fef3f2;border-color:#fecdca;color:#b42318}
 .pd-alert.success{background:#ecfdf3;border-color:#abefc6;color:#067647}
 .pd-empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:40px 24px;gap:8px}
-.pd-empty-ico{width:54px;height:54px;border-radius:16px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,var(--brand),var(--brand2));box-shadow:0 14px 30px -14px rgba(79,70,229,.7);margin-bottom:8px}
+.pd-empty-ico{width:54px;height:54px;border-radius:16px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,var(--brand),var(--brand2));box-shadow:0 14px 30px -14px rgba(11,13,18,.7);margin-bottom:8px}
 .pd-empty h3{margin:0;font-size:17px;font-weight:680}
 .pd-empty p{margin:0 0 10px;color:var(--muted);max-width:420px}
-.pd-upgrade{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;padding:18px 20px;border-radius:18px;border:1.5px solid transparent;background:linear-gradient(#fbfbff,#fbfbff) padding-box,linear-gradient(135deg,var(--brand),var(--brand2)) border-box}
+.pd-upgrade{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;padding:18px 20px;border-radius:18px;border:1.5px solid transparent;background:linear-gradient(#fafafa,#fafafa) padding-box,linear-gradient(135deg,var(--brand),var(--brand2)) border-box}
 .pd-upgrade .t{display:flex;gap:12px;align-items:center}
 .pd-upgrade b{display:block}
 .pd-upgrade p{margin:2px 0 0;color:var(--muted);font-size:13px}
