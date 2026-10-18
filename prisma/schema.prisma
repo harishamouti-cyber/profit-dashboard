@@ -1,0 +1,414 @@
+// Profit Dashboard (blueprint working name: TrueMargin)
+// Session model copied verbatim from Shopify/shopify-app-template-react-router (main, Oct 2026),
+// compatible with @shopify/shopify-app-session-storage-prisma ^11 (includes refreshToken fields).
+// Template ships SQLite; we use PostgreSQL for production (Decimal + concurrency).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+enum Plan {
+  NONE
+  STARTER // $9
+  GROWTH // $19
+  PRO // $29
+}
+
+enum FeeMode {
+  ACTUAL_THEN_RULE // use OrderTransaction.fees when present, else gateway rule
+  RULE_ONLY
+}
+
+enum ShippingCostMode {
+  NONE
+  FLAT_PER_ORDER
+  PERCENT_OF_SHIPPING_CHARGED
+  PER_ORDER_MANUAL // only from CSV / manual entry (ShippingCost rows)
+}
+
+enum SyncStatus {
+  IDLE
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum SyncKind {
+  ORDERS_BACKFILL
+  REFUNDS_BACKFILL
+  COSTS_BACKFILL
+  INCREMENTAL
+  REBUILD_METRICS
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model Shop {
+  id                String    @id @default(cuid())
+  shopDomain        String    @unique // myshop.myshopify.com
+  shopGid           String? // gid://shopify/Shop/…
+  currencyCode      String    @default("USD") // Shop.currencyCode (shop money)
+  ianaTimezone      String    @default("UTC") // Shop.ianaTimezone, used for day buckets
+  installedAt       DateTime  @default(now())
+  uninstalledAt     DateTime?
+  plan              Plan      @default(NONE)
+  /// When activeSubscriptions were last copied onto Shop.plan. Loaders refresh after 10 minutes.
+  planSyncedAt      DateTime?
+  // settings
+  feeMode           FeeMode          @default(ACTUAL_THEN_RULE)
+  shippingCostMode  ShippingCostMode @default(NONE)
+  shippingFlatCost  Decimal          @default(0) @db.Decimal(14, 4)
+  shippingPercent   Decimal          @default(0) @db.Decimal(7, 4) // 0.0000-1.0000
+  includeTestOrders Boolean          @default(false)
+  excludeCancelled  Boolean          @default(true)
+  historyDays       Int              @default(60) // 60 unless read_all_orders granted
+  onboardingDone    Boolean          @default(false)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  orders        Order[]
+  refunds       Refund[]
+  variantCosts  VariantCost[]
+  variants      Variant[]
+  gatewayRules  GatewayFeeRule[]
+  adSpend       AdSpend[]
+  expenses      Expense[]
+  dailyMetrics  DailyMetric[]
+  productDaily  ProductDailyMetric[]
+  subscription  Subscription?
+  syncJobs      SyncJob[]
+  shippingCosts ShippingCost[]
+}
+
+/// Catalog snapshot (non-PII). Needed for product table names and cost editor.
+model Variant {
+  id               String   @id @default(cuid())
+  shopId           String
+  variantGid       String
+  productGid       String
+  inventoryItemGid String?
+  productTitle     String
+  variantTitle     String?
+  sku              String?
+  shopifyUnitCost  Decimal? @db.Decimal(14, 4) // InventoryItem.unitCost.amount (shop currency)
+  updatedAt        DateTime @updatedAt
+  shop             Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, variantGid])
+  @@index([shopId, sku])
+  @@index([shopId, inventoryItemGid])
+}
+
+/// Cost history. Effective cost for a sale = latest row with effectiveFrom <= sale date (shop TZ).
+/// source SHOPIFY rows are written when unitCost changes; MANUAL/CSV rows override SHOPIFY on same/later date.
+/// Pro SKU fallback rows use variantGid "sku:<sku>" and source "SKU_FALLBACK".
+model VariantCost {
+  id            String   @id @default(cuid())
+  shopId        String
+  variantGid    String
+  unitCost      Decimal  @db.Decimal(14, 4) // shop currency
+  effectiveFrom DateTime @db.Date // local date in shop TZ
+  source        String // "SHOPIFY" | "MANUAL" | "CSV" | "SKU_FALLBACK"
+  note          String?
+  createdAt     DateTime @default(now())
+  shop          Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, variantGid, effectiveFrom])
+}
+
+/// Order snapshot: no buyer name, contact, address, or note fields stored.
+model Order {
+  id                  String    @id @default(cuid())
+  shopId              String
+  orderGid            String
+  name                String // "#1001" (not PII)
+  processedAt         DateTime // UTC
+  localDate           DateTime  @db.Date // processedAt in shop TZ
+  cancelledAt         DateTime?
+  test                Boolean   @default(false)
+  taxesIncluded       Boolean
+  /// True when any line requires physical shipping or a non-removed shipping line exists.
+  /// Kept so flat-per-order shipping can be recomputed without another API read.
+  requiresShipping    Boolean   @default(false)
+  currencyCode        String // shop currency at order time
+  presentmentCurrency String
+  sourceName          String?
+  // all money = shopMoney, original (before returns; returns handled via Refund rows)
+  grossLineSales      Decimal   @db.Decimal(14, 4) // Σ line originalTotalSet (incl. tax if taxesIncluded)
+  lineDiscounts       Decimal   @db.Decimal(14, 4) // Σ line totalDiscountSet
+  lineTax             Decimal   @db.Decimal(14, 4) // Σ line taxLines.priceSet
+  shippingCharged     Decimal   @db.Decimal(14, 4) // Σ shippingLines.discountedPriceSet
+  shippingTax         Decimal   @db.Decimal(14, 4) // Σ shippingLines.taxLines.priceSet
+  totalTax            Decimal   @db.Decimal(14, 4) // totalTaxSet (cross-check)
+  totalPrice          Decimal   @db.Decimal(14, 4) // totalPriceSet (cross-check)
+  dutiesAndFees       Decimal   @default(0) @db.Decimal(14, 4) // originalTotalDutiesSet + originalTotalAdditionalFeesSet (pass-through, excluded)
+  tips                Decimal   @default(0) @db.Decimal(14, 4) // totalTipReceivedSet (excluded from revenue)
+  paymentFees         Decimal   @default(0) @db.Decimal(14, 4) // Σ transaction fees (actual) or rule
+  feesAreActual       Boolean   @default(false)
+  gateways            String[] // paymentGatewayNames
+  shippingCost        Decimal   @default(0) @db.Decimal(14, 4) // computed at ingest from settings / ShippingCost
+  shopifyUpdatedAt    DateTime
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  shop    Shop        @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  lines   OrderLine[]
+  refunds Refund[]
+
+  @@unique([shopId, orderGid])
+  @@index([shopId, localDate])
+}
+
+model OrderLine {
+  id            String  @id @default(cuid())
+  orderId       String
+  lineItemGid   String
+  variantGid    String? // null for custom items / deleted variants
+  productGid    String?
+  title         String
+  sku           String?
+  quantity      Int
+  isGiftCard    Boolean @default(false)
+  originalTotal Decimal @db.Decimal(14, 4) // originalTotalSet.shopMoney
+  discountTotal Decimal @db.Decimal(14, 4) // totalDiscountSet.shopMoney
+  taxTotal      Decimal @db.Decimal(14, 4) // Σ taxLines.priceSet.shopMoney
+  netSalesExTax Decimal @db.Decimal(14, 4) // computed (see spec)
+  unitCostUsed  Decimal? @db.Decimal(14, 4) // resolved at ingest; null => "missing cost"
+  cogs          Decimal @default(0) @db.Decimal(14, 4)
+  order         Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, lineItemGid])
+  @@index([variantGid])
+}
+
+/// Refunds are bucketed by Refund.processedAt (refund date), not order date.
+model Refund {
+  id               String   @id @default(cuid())
+  shopId           String
+  orderId          String
+  refundGid        String
+  processedAt      DateTime
+  localDate        DateTime @db.Date
+  totalRefunded    Decimal  @db.Decimal(14, 4) // totalRefundedSet.shopMoney (money actually returned)
+  lineSubtotal     Decimal  @db.Decimal(14, 4) // Σ refundLineItems.subtotalSet
+  lineTax          Decimal  @db.Decimal(14, 4) // Σ refundLineItems.totalTaxSet
+  shippingSubtotal Decimal  @db.Decimal(14, 4) // Σ refundShippingLines.subtotalAmountSet
+  shippingTax      Decimal  @db.Decimal(14, 4) // Σ refundShippingLines.taxAmountSet
+  adjustments      Decimal  @default(0) @db.Decimal(14, 4) // Σ orderAdjustments.amountSet
+  adjustmentsTax   Decimal  @default(0) @db.Decimal(14, 4)
+  restockedCogs    Decimal  @default(0) @db.Decimal(14, 4) // COGS reversed for restocked qty
+  refundedFees     Decimal  @default(0) @db.Decimal(14, 4) // fees on REFUND transactions (often negative/0)
+  createdAt        DateTime @default(now())
+  shop             Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  order            Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  lines            RefundLine[]
+
+  @@unique([shopId, refundGid])
+  @@index([shopId, localDate])
+}
+
+model RefundLine {
+  id          String  @id @default(cuid())
+  refundId    String
+  lineItemGid String
+  variantGid  String?
+  quantity    Int
+  restocked   Boolean
+  subtotal    Decimal @db.Decimal(14, 4)
+  tax         Decimal @db.Decimal(14, 4)
+  refund      Refund  @relation(fields: [refundId], references: [id], onDelete: Cascade)
+}
+
+/// Optional manual/CSV actual shipping label costs per order.
+model ShippingCost {
+  id        String   @id @default(cuid())
+  shopId    String
+  orderName String // "#1001", matched to Order.name
+  amount    Decimal  @db.Decimal(14, 4)
+  createdAt DateTime @default(now())
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, orderName])
+}
+
+/// Fallback fee rule per gateway name (e.g. "paypal": 3.49% + 0.49).
+model GatewayFeeRule {
+  id      String  @id @default(cuid())
+  shopId  String
+  gateway String // matches Order.paymentGatewayNames entry, lowercased
+  percent Decimal @db.Decimal(7, 4) // 0.0349
+  fixed   Decimal @db.Decimal(14, 4) // per transaction, shop currency
+  shop    Shop    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, gateway])
+}
+
+model AdSpend {
+  id        String   @id @default(cuid())
+  shopId    String
+  date      DateTime @db.Date // shop-local date
+  channel   String // "meta" | "google" | "tiktok" | "pinterest" | "other:<label>"
+  amount    Decimal  @db.Decimal(14, 4) // shop currency
+  source    String // "MANUAL" | "CSV"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, date, channel])
+  @@index([shopId, date])
+}
+
+enum ExpenseFrequency {
+  ONE_TIME
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+model Expense {
+  id        String           @id @default(cuid())
+  shopId    String
+  name      String
+  category  String           @default("other") // apps, staff, software, rent, other
+  amount    Decimal          @db.Decimal(14, 4)
+  frequency ExpenseFrequency
+  startDate DateTime         @db.Date
+  endDate   DateTime?        @db.Date
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  shop      Shop             @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId])
+}
+
+/// Daily rollup in shop TZ & shop currency. Rebuilt for affected dates on any change.
+model DailyMetric {
+  id              String   @id @default(cuid())
+  shopId          String
+  date            DateTime @db.Date
+  orders          Int      @default(0)
+  grossSales      Decimal  @default(0) @db.Decimal(14, 4) // ex-tax, before discounts
+  discounts       Decimal  @default(0) @db.Decimal(14, 4)
+  returns         Decimal  @default(0) @db.Decimal(14, 4) // ex-tax refunded merchandise+adjustments (by refund date)
+  netSales        Decimal  @default(0) @db.Decimal(14, 4) // gross - discounts - returns
+  shippingRevenue Decimal  @default(0) @db.Decimal(14, 4) // ex-tax, net of shipping refunds
+  taxCollected    Decimal  @default(0) @db.Decimal(14, 4) // informational only
+  revenue         Decimal  @default(0) @db.Decimal(14, 4) // netSales + shippingRevenue
+  cogs            Decimal  @default(0) @db.Decimal(14, 4) // net of restocked returns
+  shippingCost    Decimal  @default(0) @db.Decimal(14, 4)
+  paymentFees     Decimal  @default(0) @db.Decimal(14, 4)
+  adSpend         Decimal  @default(0) @db.Decimal(14, 4)
+  expenses        Decimal  @default(0) @db.Decimal(14, 4)
+  grossProfit     Decimal  @default(0) @db.Decimal(14, 4) // revenue - cogs
+  contribution    Decimal  @default(0) @db.Decimal(14, 4) // grossProfit - shippingCost - paymentFees - adSpend
+  netProfit       Decimal  @default(0) @db.Decimal(14, 4) // contribution - expenses
+  missingCostUnits Int     @default(0)
+  computedAt      DateTime @default(now())
+  shop            Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, date])
+}
+
+model ProductDailyMetric {
+  id            String   @id @default(cuid())
+  shopId        String
+  date          DateTime @db.Date
+  productGid    String
+  unitsSold     Int      @default(0)
+  unitsReturned Int      @default(0)
+  netSales      Decimal  @default(0) @db.Decimal(14, 4)
+  cogs          Decimal  @default(0) @db.Decimal(14, 4)
+  allocatedFees Decimal  @default(0) @db.Decimal(14, 4) // payment fees pro-rata by line net sales
+  grossProfit   Decimal  @default(0) @db.Decimal(14, 4)
+  shop          Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, date, productGid])
+}
+
+model Subscription {
+  id               String    @id @default(cuid())
+  shopId           String    @unique
+  subscriptionGid  String?
+  plan             Plan      @default(NONE)
+  status           String // AppSubscriptionStatus: ACTIVE, PENDING, CANCELLED, DECLINED, EXPIRED, FROZEN, ACCEPTED
+  test             Boolean   @default(false)
+  trialDays        Int       @default(0)
+  currentPeriodEnd DateTime?
+  updatedAt        DateTime  @updatedAt
+  shop             Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+}
+
+model SyncJob {
+  id               String     @id @default(cuid())
+  shopId           String
+  kind             SyncKind
+  status           SyncStatus @default(IDLE)
+  bulkOperationGid String?
+  cursorUpdatedAt  DateTime? // high-water mark for incremental sync (orders updated_at)
+  objectCount      Int        @default(0)
+  error            String?
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  createdAt        DateTime   @default(now())
+  shop             Shop       @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, kind, createdAt])
+}
+
+/// Idempotency for webhooks (X-Shopify-Webhook-Id / event id).
+model ProcessedWebhook {
+  id         String   @id // webhook id header
+  shopDomain String
+  topic      String
+  receivedAt DateTime @default(now())
+
+  @@index([shopDomain, receivedAt])
+}
+
+/// Postgres-backed job queue. Polled by app/jobs/worker.server.ts.
+model Job {
+  id         String    @id @default(cuid())
+  shopDomain String
+  type       String
+  payload    Json
+  runAt      DateTime  @default(now())
+  attempts   Int       @default(0)
+  status     JobStatus @default(PENDING)
+  lastError  String?   @db.Text
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([status, runAt])
+  @@index([shopDomain, type])
+}
