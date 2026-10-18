@@ -2,11 +2,13 @@ import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "re
 import { Form, useActionData, useLoaderData, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { CsvDropZone } from "../components/CsvDropZone";
+import { EmptyState } from "../components/EmptyState";
+import { SaveToast } from "../components/SaveToast";
 import { UpgradeCard } from "../components/UpgradeCard";
 import db from "../db.server";
 import { enqueue } from "../jobs/queue.server";
 import { parseCostsCsv } from "../lib/csv";
-import { fmt } from "../lib/money";
+import { fmt, isMoney } from "../lib/money";
 import { getPlanLimits, requirePlan } from "../lib/plan.server";
 import { requireShop } from "../lib/shop.server";
 import { fromDbDate, todayInZone, toDbDate } from "../lib/tz";
@@ -64,8 +66,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const variantGid = String(form.get("variantGid") ?? "");
     const unitCost = String(form.get("unitCost") ?? "");
     const effectiveFrom = String(form.get("effectiveFrom") ?? "");
-    if (!variantGid || !unitCost || !/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) {
-      return { message: "Variant, cost, and effective date are required." };
+    if (!variantGid || !isMoney(unitCost) || !/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) {
+      return { message: "Variant, a numeric cost, and an effective date (YYYY-MM-DD) are required.", errors: ["Variant, a numeric cost, and an effective date (YYYY-MM-DD) are required."] };
     }
     await db.variantCost.create({
       data: {
@@ -83,6 +85,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const unitCost = String(form.get("unitCost") ?? "");
     const effectiveFrom = String(form.get("effectiveFrom") ?? "");
     const filter = String(form.get("filter") ?? "").toLowerCase();
+    if (!isMoney(unitCost) || !/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) {
+      return { message: "Bulk apply needs a numeric cost and an effective date.", errors: ["Bulk apply needs a numeric cost and an effective date."] };
+    }
     const variants = await db.variant.findMany({ where: { shopId: shop.id } });
     const matches = variants.filter((variant) => {
       const haystack = `${variant.sku ?? ""} ${variant.productTitle}`.toLowerCase();
@@ -122,7 +127,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
       applied += 1;
     }
-    return { message: `Imported ${applied} costs. ${parsed.errors.length} errors.`, errors: parsed.errors.slice(0, 20) };
+    return {
+      message: `Imported ${applied} costs.`,
+      errors: parsed.errors.slice(0, 20).map((error) => (error.row ? `Row ${error.row}: ${error.message}` : error.message)),
+    };
   }
 
   if (intent === "recalc") {
@@ -138,7 +146,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const sku = String(form.get("sku") ?? "").trim();
     const unitCost = String(form.get("unitCost") ?? "");
     const effectiveFrom = String(form.get("effectiveFrom") ?? "");
-    if (!sku) return { message: "SKU is required." };
+    if (!sku || !isMoney(unitCost) || !/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) {
+      return { message: "SKU, a numeric cost, and an effective date are required.", errors: ["SKU, a numeric cost, and an effective date are required."] };
+    }
     await db.variantCost.create({
       data: {
         shopId: shop.id,
@@ -165,7 +175,7 @@ export default function Costs() {
         <s-paragraph>
           Shopify cost is read-only. An override uses the latest effective date. On the same date, a manual or CSV cost beats the Shopify cost. Historical orders keep the cost stored at ingest until you recalculate.
         </s-paragraph>
-        {result?.message ? <s-banner tone="info" heading="Costs">{result.message}</s-banner> : null}
+        <SaveToast message={result?.message} errors={result && "errors" in result ? result.errors : []} />
         <Form method="get">
           <s-search-field label="Filter" name="q" value={params.get("q") ?? ""} />
           <s-button type="submit" variant="secondary">Filter</s-button>
@@ -203,6 +213,15 @@ export default function Costs() {
             <s-button type="submit" variant="secondary">Save SKU fallback</s-button>
           </Form>
         </s-section>
+        {data.rows.length === 0 ? (
+          <EmptyState
+            heading={data.missingOnly ? "No missing costs in this filter" : "No variants yet"}
+            icon="product"
+            body={data.missingOnly ? "Every variant in the filter has a Shopify cost, or the catalog is still syncing." : "The product catalog syncs after install. You can leave this page open; it stays usable with an empty list."}
+            href="/app/onboarding"
+            action="Check sync progress"
+          />
+        ) : null}
         <s-table>
           <s-table-header-row>
             <s-table-header>Variant</s-table-header>

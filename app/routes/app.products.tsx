@@ -1,21 +1,25 @@
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Form, useLoaderData, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import { EmptyState } from "../components/EmptyState";
 import db from "../db.server";
 import { D, fmt, fmtRatio } from "../lib/money";
 import { getPlanLimits } from "../lib/plan.server";
 import { requireShop } from "../lib/shop.server";
-import { presetRange, todayInZone, toDbDate } from "../lib/tz";
+import { marginLabel, marginTone } from "../lib/profit/margin";
+import { safeRange, todayInZone, toDbDate } from "../lib/tz";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { shop } = await requireShop(request);
   const url = new URL(request.url);
   const today = todayInZone(shop.ianaTimezone);
-  const range = presetRange("30d", today);
-  const from = url.searchParams.get("from") ?? range.from;
-  const to = url.searchParams.get("to") ?? today;
+  const { from, to } = safeRange(
+    { preset: url.searchParams.get("preset"), from: url.searchParams.get("from"), to: url.searchParams.get("to") },
+    today,
+  );
   const q = (url.searchParams.get("q") ?? "").toLowerCase();
-  const sort = url.searchParams.get("sort") === "profit_asc" ? "profit_asc" : "profit_desc";
+  const sortParam = url.searchParams.get("sort");
+  const sort = sortParam === "profit_asc" || sortParam === "margin_asc" || sortParam === "margin_desc" ? sortParam : "profit_desc";
   const rows = await db.productDailyMetric.findMany({
     where: { shopId: shop.id, date: { gte: toDbDate(from), lte: toDbDate(to) } },
   });
@@ -55,23 +59,36 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     fees: fmt(row.fees, shop.currencyCode),
     grossProfit: fmt(row.grossProfit, shop.currencyCode),
     grossProfitRaw: row.grossProfit.toString(),
+    marginValue: row.netSales.isZero() ? null : row.grossProfit.div(row.netSales),
     margin: fmtRatio(row.netSales.isZero() ? null : row.grossProfit.div(row.netSales)),
     covered: row.cogs.gt(0) || row.unitsSold === 0,
   }));
   if (q) products = products.filter((product) => product.title.toLowerCase().includes(q));
   products.sort((a, b) => {
+    if (sort === "margin_asc" || sort === "margin_desc") {
+      const left = a.marginValue ?? D(-1);
+      const right = b.marginValue ?? D(-1);
+      const delta = D(left).minus(D(right));
+      return sort === "margin_asc" ? delta.cmp(0) : delta.neg().cmp(0);
+    }
     const delta = D(a.grossProfitRaw).minus(D(b.grossProfitRaw));
     return sort === "profit_asc" ? delta.cmp(0) : delta.neg().cmp(0);
   });
   const limits = getPlanLimits(shop.plan);
   const capped = Number.isFinite(limits.productRows) ? products.slice(0, limits.productRows) : products;
+  const visible = capped.map(({ marginValue, ...product }) => {
+    const tone = marginTone(marginValue);
+    return { ...product, marginTone: tone, marginLabel: marginLabel(tone) };
+  });
   return {
-    products: capped,
+    products: visible,
     hidden: products.length - capped.length,
     canExport: limits.csvExport,
     from,
     to,
+    sort,
     currency: shop.currencyCode,
+    variantCount: variants.length,
   };
 };
 
@@ -90,10 +107,18 @@ export default function Products() {
           Ad spend and expenses are not allocated to products. Fees are split inside each order by ex-tax line net sales. Amounts are in {data.currency}.
         </s-paragraph>
         <Form method="get">
+          <input type="hidden" name="from" value={data.from} />
+          <input type="hidden" name="to" value={data.to} />
+          <input type="hidden" name="sort" value={data.sort} />
           <s-search-field label="Search products" name="q" value={params.get("q") ?? ""} />
           <s-button type="submit" variant="secondary">Search</s-button>
-          <s-link href={`?sort=profit_asc&from=${data.from}&to=${data.to}`}>Lowest profit first</s-link>
         </Form>
+        <s-button-group>
+          <s-button href={`?sort=profit_desc&from=${data.from}&to=${data.to}&q=${params.get("q") ?? ""}`} variant={data.sort === "profit_desc" ? "primary" : "tertiary"}>Profit</s-button>
+          <s-button href={`?sort=profit_asc&from=${data.from}&to=${data.to}&q=${params.get("q") ?? ""}`} variant="tertiary">Lowest profit</s-button>
+          <s-button href={`?sort=margin_desc&from=${data.from}&to=${data.to}&q=${params.get("q") ?? ""}`} variant="tertiary">Margin</s-button>
+          <s-button href={`?sort=margin_asc&from=${data.from}&to=${data.to}&q=${params.get("q") ?? ""}`} variant="tertiary">Lowest margin</s-button>
+        </s-button-group>
         {data.hidden > 0 ? (
           <s-banner tone="info" heading="Starter shows the top 10">
             <s-paragraph>
@@ -106,6 +131,15 @@ export default function Products() {
         ) : (
           <s-paragraph>CSV export is included on Growth and Pro.</s-paragraph>
         )}
+        {data.products.length === 0 ? (
+          <EmptyState
+            heading="No product sales in this range"
+            icon="product"
+            body={data.variantCount === 0 ? "The catalog has not synced yet. You can still add costs once variants arrive." : "Try another date range, or add costs so the next orders have a margin."}
+            href="/app/costs"
+            action="Add product costs"
+          />
+        ) : null}
         <s-table>
           <s-table-header-row>
             <s-table-header>Product</s-table-header>
@@ -128,7 +162,9 @@ export default function Products() {
                 <s-table-cell>{product.cogs}</s-table-cell>
                 <s-table-cell>{product.fees}</s-table-cell>
                 <s-table-cell>{product.grossProfit}</s-table-cell>
-                <s-table-cell>{product.margin}</s-table-cell>
+                <s-table-cell>
+                  <s-badge tone={product.marginTone}>{product.marginLabel} {product.margin}</s-badge>
+                </s-table-cell>
                 <s-table-cell>
                   <s-badge tone={product.covered ? "success" : "warning"}>{product.covered ? "Costed" : "Missing"}</s-badge>
                 </s-table-cell>

@@ -2,11 +2,12 @@ import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "re
 import { Form, useActionData, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { CsvDropZone } from "../components/CsvDropZone";
+import { SaveToast } from "../components/SaveToast";
 import { UpgradeCard } from "../components/UpgradeCard";
 import db from "../db.server";
 import { enqueue } from "../jobs/queue.server";
 import { parseShippingCsv } from "../lib/csv";
-import { fmt } from "../lib/money";
+import { fmt, isMoney } from "../lib/money";
 import { getPlanLimits } from "../lib/plan.server";
 import { requireShop } from "../lib/shop.server";
 import { estimateRuleNote } from "../lib/sync/bootstrap.server";
@@ -67,14 +68,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
     }
     await enqueue({ shopDomain: shop.shopDomain, type: "recompute_shipping", payload: {} });
-    return { message: `Saved ${parsed.rows.length} shipping costs.` };
+    return {
+      message: `Saved ${parsed.rows.length} shipping costs.`,
+      errors: parsed.errors.map((error) => `Row ${error.row}: ${error.message}`),
+    };
   }
   if (intent === "rule") {
     if (!limits.customGatewayRules) return { message: "Custom gateway rules are a Pro feature." };
     const gateway = String(form.get("gateway") ?? "").trim().toLowerCase().replace(/\s+/g, "_");
-    const percent = Number(form.get("percent") ?? "0") / 100;
+    const percentRaw = String(form.get("percent") ?? "0");
     const fixed = String(form.get("fixed") ?? "0");
-    if (!gateway) return { message: "Gateway is required." };
+    if (!gateway) return { message: "Gateway is required.", errors: ["Gateway is required."] };
+    if (!isMoney(percentRaw) || !isMoney(fixed)) {
+      return { message: "Percent and fixed fee must be numbers.", errors: ["Percent and fixed fee must be numbers."] };
+    }
+    const percent = Number(percentRaw) / 100;
     await db.gatewayFeeRule.upsert({
       where: { shopId_gateway: { shopId: shop.id, gateway } },
       create: { shopId: shop.id, gateway, percent: percent.toFixed(4), fixed },
@@ -86,7 +94,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const feeMode = String(form.get("feeMode") ?? shop.feeMode);
   const shippingCostMode = String(form.get("shippingCostMode") ?? shop.shippingCostMode);
   const flat = String(form.get("shippingFlatCost") ?? "0");
-  const percent = Number(form.get("shippingPercent") ?? "0") / 100;
+  const percentRaw = String(form.get("shippingPercent") ?? "0");
+  if (!isMoney(flat || "0") || !isMoney(percentRaw || "0")) {
+    return { message: "Shipping amounts must be numbers.", errors: ["Shipping amounts must be numbers."] };
+  }
+  const percent = Number(percentRaw) / 100;
   await db.shop.update({
     where: { id: shop.id },
     data: {
@@ -114,7 +126,7 @@ export default function SettingsPage() {
   return (
     <s-page heading="Settings">
       <s-stack direction="block" gap="base">
-        {result?.message ? <s-banner tone="info" heading="Settings">{result.message}</s-banner> : null}
+        <SaveToast message={result?.message} errors={result && "errors" in result ? result.errors : []} />
         <s-section heading="Shop">
           <s-paragraph>Timezone {data.timezone}. Currency {data.currency}. History window {data.historyDays} days. These come from Shopify and are read-only here.</s-paragraph>
         </s-section>

@@ -1,17 +1,17 @@
 import type { ActionFunctionArgs } from "react-router";
-import { authenticate } from "../shopify.server";
 import db from "../db.server";
-import { acceptWebhook } from "../lib/webhooks.server";
+import { asWebhookPayload, handleShopifyWebhook } from "../lib/webhooks.server";
+import { authenticate } from "../shopify.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { payload, session, topic, shop, webhookId } = await authenticate.webhook(request);
-  console.log(`Received ${topic} webhook for ${shop}`);
-  const current = payload.current as string[];
-  if (session) {
+  const result = await authenticate.webhook(request);
+  const payload = asWebhookPayload(result.payload);
+  const current = Array.isArray(payload.current) ? payload.current.map(String) : [];
+  if (result.session) {
     await db.session.update({
-      where: { id: session.id },
-      data: { scope: current.toString() },
+      where: { id: result.session.id },
+      data: { scope: current.join(",") },
     });
   }
-  return acceptWebhook({ webhookId, shop, topic, payload });
+  return handleShopifyWebhook(request, result);
 };

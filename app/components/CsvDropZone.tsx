@@ -1,4 +1,5 @@
 import { useFetcher } from "react-router";
+import { SaveToast } from "./SaveToast";
 
 export function CsvDropZone({
   intent,
@@ -10,6 +11,7 @@ export function CsvDropZone({
   accept?: string;
 }) {
   const fetcher = useFetcher();
+  const data = fetcher.data && typeof fetcher.data === "object" ? (fetcher.data as { message?: string; errors?: string[] }) : null;
   return (
     <fetcher.Form method="post">
       <input type="hidden" name="intent" value={intent} />
@@ -30,9 +32,7 @@ export function CsvDropZone({
           reader.readAsText(file);
         }}
       />
-      {fetcher.data && typeof fetcher.data === "object" && "message" in fetcher.data ? (
-        <s-paragraph>{String((fetcher.data as { message: string }).message)}</s-paragraph>
-      ) : null}
+      <SaveToast message={data?.message} errors={data?.errors ?? []} />
     </fetcher.Form>
   );
 }

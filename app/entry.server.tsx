@@ -7,7 +7,9 @@ import { isbot } from "isbot";
 import { addDocumentResponseHeaders } from "./shopify.server";
 import { startWorker } from "./jobs/worker.server";
 
-startWorker();
+if (process.env.DISABLE_EMBEDDED_WORKER !== "1") {
+  startWorker();
+}
 
 export const streamTimeout = 5000;
 

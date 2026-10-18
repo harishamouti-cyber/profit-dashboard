@@ -1,11 +1,10 @@
 import type { ActionFunctionArgs } from "react-router";
-import { authenticate } from "../shopify.server";
 import db from "../db.server";
-import { acceptWebhook } from "../lib/webhooks.server";
+import { handleShopifyWebhook } from "../lib/webhooks.server";
+import { authenticate } from "../shopify.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { shop, topic, payload, webhookId } = await authenticate.webhook(request);
-  console.log(`Received ${topic} webhook for ${shop}`);
-  await db.session.deleteMany({ where: { shop } });
-  return acceptWebhook({ webhookId, shop, topic, payload });
+  const result = await authenticate.webhook(request);
+  await db.session.deleteMany({ where: { shop: result.shop } });
+  return handleShopifyWebhook(request, result);
 };

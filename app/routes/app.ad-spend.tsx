@@ -2,14 +2,15 @@ import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "re
 import { Form, useActionData, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { CsvDropZone } from "../components/CsvDropZone";
+import { SaveToast } from "../components/SaveToast";
 import { UpgradeCard } from "../components/UpgradeCard";
 import db from "../db.server";
 import { enqueue } from "../jobs/queue.server";
 import { parseAdSpendCsv } from "../lib/csv";
-import { fmt } from "../lib/money";
+import { fmt, isMoney } from "../lib/money";
 import { getPlanLimits } from "../lib/plan.server";
 import { requireShop } from "../lib/shop.server";
-import { addDays, eachDay, fromDbDate, todayInZone, toDbDate } from "../lib/tz";
+import { addDays, eachDay, fromDbDate, isIsoDay, todayInZone, toDbDate } from "../lib/tz";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { shop } = await requireShop(request);
@@ -54,12 +55,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
     const dates = [...new Set(parsed.rows.map((row) => row.date))];
     await enqueue({ shopDomain: shop.shopDomain, type: "rebuild_days", payload: { dates } });
-    return { message: `Saved ${parsed.rows.length} rows. ${parsed.errors.length} errors.` };
+    return {
+      message: `Saved ${parsed.rows.length} rows.`,
+      errors: parsed.errors.map((error) => `Row ${error.row}: ${error.message}`),
+    };
   }
   const date = String(form.get("date") ?? "");
   const channel = String(form.get("channel") ?? "").trim().toLowerCase();
   const amount = String(form.get("amount") ?? "0");
-  if (!date || !channel) return { message: "Date and channel are required." };
+  if (!isIsoDay(date) || !channel || !isMoney(amount)) {
+    return { message: "Date (YYYY-MM-DD), channel, and a numeric amount are required.", errors: ["Date (YYYY-MM-DD), channel, and a numeric amount are required."] };
+  }
   await db.adSpend.upsert({
     where: { shopId_date_channel: { shopId: shop.id, date: toDbDate(date), channel } },
     create: { shopId: shop.id, date: toDbDate(date), channel, amount, source: "MANUAL" },
@@ -78,7 +84,7 @@ export default function AdSpendPage() {
         <s-paragraph>
           Every channel counts. Nothing is filtered by attribution. Amounts are in {data.currency}.
         </s-paragraph>
-        {result?.message ? <s-banner tone="info" heading="Ad spend">{result.message}</s-banner> : null}
+        <SaveToast message={result?.message} errors={result && "errors" in result ? result.errors : []} />
         <s-section heading="Add spend">
           <Form method="post">
             <s-date-field label="Date" name="date" value={data.today} />

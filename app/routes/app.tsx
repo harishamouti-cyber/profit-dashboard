@@ -1,5 +1,6 @@
+import { useEffect } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Outlet, useLoaderData, useRouteError } from "react-router";
+import { Outlet, useLoaderData, useNavigation, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { requireFreshShop } from "../lib/shop.server";
@@ -15,6 +16,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export default function App() {
   const { apiKey } = useLoaderData<typeof loader>();
+  const navigation = useNavigation();
+  useEffect(() => {
+    if (typeof shopify === "undefined") return;
+    shopify.loading(navigation.state !== "idle");
+  }, [navigation.state]);
 
   return (
     <AppProvider apiKey={apiKey}>

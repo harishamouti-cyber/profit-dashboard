@@ -1,12 +1,18 @@
 # This file stores configurations for your Shopify app.
-client_id = ""
+client_id = "6474e91891fa0d5cd17324e435e39220"
 name = "Profit Dashboard"
+application_url = "https://example.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+include_config_on_deploy = true
 
 [access_scopes]
-# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 scopes = "read_orders,read_products,read_inventory"
-# Request later (needs Shopify approval in the Partner Dashboard): read_all_orders
-# Not in v1: read_shopify_payments_payouts. Fees come from OrderTransaction.fees.
+
+[auth]
+redirect_urls = [ "https://example.com/api/auth" ]
 
 [webhooks]
 api_version = "2026-10"

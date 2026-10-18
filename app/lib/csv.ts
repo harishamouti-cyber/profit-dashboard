@@ -22,15 +22,20 @@ export interface ParsedShipping {
   errors: CsvRowError[];
 }
 
-function records(text: string): Array<Record<string, string>> {
-  const parsed = parse(text, {
-    columns: (header: string[]) => header.map((column) => column.trim().toLowerCase()),
-    skip_empty_lines: true,
-    trim: true,
-    relax_column_count: true,
-    bom: true,
-  }) as Array<Record<string, string>>;
-  return parsed;
+function records(text: string): { rows: Array<Record<string, string>>; fatal: string | null } {
+  if (!text.trim()) return { rows: [], fatal: "CSV is empty." };
+  try {
+    const parsed = parse(text, {
+      columns: (header: string[]) => header.map((column) => column.trim().toLowerCase()),
+      skip_empty_lines: true,
+      trim: true,
+      relax_column_count: true,
+      bom: true,
+    }) as Array<Record<string, string>>;
+    return { rows: parsed, fatal: null };
+  } catch {
+    return { rows: [], fatal: "CSV could not be parsed. Check the header row and quotes." };
+  }
 }
 
 function cell(row: Record<string, string>, names: string[]): string {
@@ -46,8 +51,10 @@ const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "use YYYY-MM-DD");
 export function parseCostsCsv(text: string): ParsedCosts {
   const rows: ParsedCosts["rows"] = [];
   const errors: CsvRowError[] = [];
+  const parsed = records(text);
+  if (parsed.fatal) return { rows, errors: [{ row: 1, message: parsed.fatal }] };
   let index = 1;
-  for (const record of records(text)) {
+  for (const record of parsed.rows) {
     index += 1;
     const sku = cell(record, ["sku", "variant sku"]);
     const costRaw = cell(record, ["unit_cost", "unit cost", "cost"]);
@@ -79,16 +86,11 @@ export function parseCostsCsv(text: string): ParsedCosts {
 export function parseAdSpendCsv(text: string): ParsedAdSpend {
   const rows: ParsedAdSpend["rows"] = [];
   const errors: CsvRowError[] = [];
-  const parsed = parse(text, {
-    columns: true,
-    skip_empty_lines: true,
-    trim: true,
-    relax_column_count: true,
-    bom: true,
-  }) as Array<Record<string, string>>;
+  const parsed = records(text);
+  if (parsed.fatal) return { rows, errors: [{ row: 1, message: parsed.fatal }] };
 
   let index = 1;
-  for (const original of parsed) {
+  for (const original of parsed.rows) {
     index += 1;
     const record: Record<string, string> = {};
     for (const [key, value] of Object.entries(original)) {
@@ -123,8 +125,10 @@ export function parseAdSpendCsv(text: string): ParsedAdSpend {
 export function parseShippingCsv(text: string): ParsedShipping {
   const rows: ParsedShipping["rows"] = [];
   const errors: CsvRowError[] = [];
+  const parsed = records(text);
+  if (parsed.fatal) return { rows, errors: [{ row: 1, message: parsed.fatal }] };
   let index = 1;
-  for (const record of records(text)) {
+  for (const record of parsed.rows) {
     index += 1;
     const orderName = cell(record, ["order_name", "order name", "order", "name"]);
     const amountRaw = cell(record, ["amount", "cost", "shipping_cost"]);

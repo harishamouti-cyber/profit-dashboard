@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Form, useActionData, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import { SaveToast } from "../components/SaveToast";
 import { billingMode, createSubscriptionRaw, isTestCharge, pricingPageUrl } from "../lib/billing.server";
 import { PLAN_PRICES, type BillingPlanName } from "../lib/plan";
 import { requireShop } from "../lib/shop.server";
@@ -49,12 +50,15 @@ export default function BillingPage() {
   const result = useActionData<typeof action>();
   useEffect(() => {
     const url = result && "confirmationUrl" in result ? result.confirmationUrl : result && "pricingUrl" in result ? result.pricingUrl : null;
-    if (url) window.open(url, "_top");
+    if (url && typeof shopify !== "undefined") {
+      window.open(url, "_top");
+    }
   }, [result]);
 
   return (
     <s-page heading="Plan">
       <s-stack direction="block" gap="base">
+        <SaveToast message={result && "message" in result ? result.message : null} />
         <s-paragraph>Flat monthly pricing. No per-order fees on any plan. Current plan: {data.plan}.</s-paragraph>
         {data.mode === "shopify_app_pricing" ? (
           <s-banner tone="info" heading="Shopify App Pricing">
