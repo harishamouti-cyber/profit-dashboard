@@ -7,7 +7,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
  * so nothing leaks into Polaris web components.
  */
 export const PREMIUM_CSS = `
-.pd{--ink:#0b0d12;--muted:#5c6170;--line:#e6e8ee;--soft:#f6f7fb;--brand:#0b0d12;--brand2:#2b2f38;--good:#067647;--goodbg:#dcfae6;--bad:#b42318;--badbg:#fee4e2;--warn:#b54708;--warnbg:#fef0c7;--info:#3538cd;--infobg:#f2f4f7;font-family:Inter,system-ui,-apple-system,sans-serif;color:var(--ink);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.pd{--ink:#0b0d12;--muted:#5c6170;--line:#e6e8ee;--soft:#f6f7fb;--brand:#0b0d12;--brand2:#2b2f38;--good:#067647;--goodbg:#dcfae6;--bad:#b42318;--badbg:#fee4e2;--warn:#b54708;--warnbg:#fef0c7;--info:#344054;--infobg:#f2f4f7;font-family:Inter,system-ui,-apple-system,sans-serif;color:var(--ink);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
 .pd *{box-sizing:border-box}
 .pd a{color:inherit}
 .pd-stack{display:grid;gap:18px}
@@ -84,7 +84,7 @@ select.pd-input{appearance:none;background-image:linear-gradient(45deg,transpare
 .pd-table td{padding:12px 16px;border-bottom:1px solid #f1f2f5;vertical-align:middle}
 .pd-table th.r,.pd-table td.r{text-align:right}
 .pd-table tbody tr{transition:background .12s ease}
-.pd-table tbody tr:hover{background:#fafbff}
+.pd-table tbody tr:hover{background:#fafafa}
 .pd-table tr:last-child td{border-bottom:0}
 .pd-table .strong{font-weight:650}
 .pd-pos{color:var(--good);font-weight:650}
