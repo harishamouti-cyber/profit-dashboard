@@ -1,0 +1,12 @@
+{
+  "orderProcessedAt": "2026-06-01T04:00:00.000Z",
+  "refundProcessedAt": "2026-06-02T06:00:00.000Z",
+  "americaLosAngeles": {
+    "orderLocalDate": "2026-05-31",
+    "refundLocalDate": "2026-06-01"
+  },
+  "asiaKarachi": {
+    "orderLocalDate": "2026-06-01",
+    "refundLocalDate": "2026-06-02"
+  }
+}

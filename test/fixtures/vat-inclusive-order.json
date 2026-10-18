@@ -1,0 +1,8 @@
+{
+  "description": "Tax-inclusive VAT 20%. Line 120 includes tax, discount 12, tax lines 18. Net sales ex tax = 90.",
+  "taxesIncluded": true,
+  "originalTotal": "120",
+  "discountTotal": "12",
+  "taxTotal": "18",
+  "expectedNetSalesExTax": "90"
+}
