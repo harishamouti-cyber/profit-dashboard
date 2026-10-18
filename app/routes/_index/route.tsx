@@ -22,7 +22,10 @@ export default function Landing() {
   return (
     <div className={styles.page}>
       <header className={styles.nav}>
-        <span className={styles.mark}>Profit Dashboard</span>
+        <span className={styles.mark}>
+          <img src="/brand/icon.svg" alt="" width={28} height={28} className={styles.logo} />
+          Profit Dashboard
+        </span>
         <a href="#pricing">Pricing</a>
       </header>
       <section className={styles.hero}>

@@ -221,6 +221,7 @@ export default function BillingPage() {
 
         <div className="pp-sec">
           <h3>Compare plans</h3>
+          <div style={{ overflowX: "auto" }}>
           <table className="pp-table">
             <thead>
               <tr>
@@ -241,6 +242,7 @@ export default function BillingPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
 
         <div className="pp-sec">
