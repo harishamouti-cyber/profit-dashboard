@@ -44,7 +44,7 @@ export function ErrorBoundary() {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <title>{notFound ? "Page not found" : "Something went wrong"} · Profit Dashboard</title>
+        <title>{notFound ? "Page not found" : "Something went wrong"} · Plainprofit</title>
         <link rel="icon" type="image/png" sizes="32x32" href="/brand/profit-icon-32.png" />
         <Meta />
         <Links />
@@ -55,7 +55,7 @@ export function ErrorBoundary() {
           <h1 style={{ letterSpacing: "-0.03em" }}>{notFound ? "Page not found" : "Something went wrong"}</h1>
           <p style={{ color: "#52525b" }}>
             {notFound
-              ? "This page doesn't exist. Open Profit Dashboard from your Shopify admin."
+              ? "This page doesn't exist. Open Plainprofit from your Shopify admin."
               : "Please refresh the page. If it keeps happening, reopen the app from your Shopify admin."}
           </p>
           <a href="/" style={{ color: "#0b0d12", fontWeight: 600 }}>Go to the home page</a>

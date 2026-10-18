@@ -1,6 +1,6 @@
 # This file stores configurations for your Shopify app.
 client_id = "6474e91891fa0d5cd17324e435e39220"
-name = "Profit Dashboard"
+name = "Plainprofit: Profit Tracker"
 application_url = "https://example.com"
 embedded = true
 

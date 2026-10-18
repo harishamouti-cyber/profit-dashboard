@@ -1,4 +1,4 @@
-# Deploy Profit Dashboard on Render
+# Deploy Plainprofit on Render
 
 Render is the host used here because the app needs a process that stays up. The job queue polls every 2 seconds and reconciles orders every 15 minutes. A serverless host that freezes between requests would stall that work. Render keeps a web service and a separate background worker running, and it provides managed Postgres.
 
@@ -6,7 +6,7 @@ You need:
 
 - A GitHub account with this repo
 - A [Render](https://render.com) account
-- A Shopify Partner account and the Profit Dashboard app (`profit-dashboard-214`)
+- A Shopify Partner account and the Plainprofit app (`profit-dashboard-214`)
 
 ## 1. Create the Render services
 

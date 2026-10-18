@@ -24,7 +24,7 @@ export default function Landing() {
       <header className={styles.nav}>
         <span className={styles.mark}>
           <img src="/brand/icon.svg" alt="" width={28} height={28} className={styles.logo} />
-          Profit Dashboard
+          Plainprofit
         </span>
         <a href="#pricing">Pricing</a>
       </header>
@@ -32,7 +32,7 @@ export default function Landing() {
         <p className={styles.eyebrow}>Flat monthly pricing. No per-order fees.</p>
         <h1>Accurate profit, with VAT kept out of revenue.</h1>
         <p className={styles.lead}>
-          Profit Dashboard is a Shopify embedded app for merchants who want the number they can take to the bank:
+          Plainprofit is a Shopify embedded app for merchants who want the number they can take to the bank:
           revenue after discounts and returns, minus COGS, fees, shipping, ads, and expenses.
         </p>
         {showForm ? (

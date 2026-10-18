@@ -1,6 +1,6 @@
 # Privacy
 
-Profit Dashboard calculates shop profit. It does not build a customer profile and it does not contact buyers.
+Plainprofit calculates shop profit. It does not build a customer profile and it does not contact buyers.
 
 ## What we read
 
