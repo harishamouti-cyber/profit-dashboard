@@ -1,8 +1,8 @@
-# Plainprofit
+# Penni
 
 Embedded Shopify app that shows a merchant's profit: revenue after discounts and returns, COGS, payment fees, shipping cost, ad spend, and operating expenses. Pricing is a flat monthly plan ($9 / $19 / $29). There are no per-order fees.
 
-The merchant-facing name is Plainprofit. The blueprint's working name was TrueMargin.
+The merchant-facing name is Penni. The blueprint's working name was TrueMargin.
 
 ## Stack
 

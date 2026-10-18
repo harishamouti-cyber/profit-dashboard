@@ -204,7 +204,7 @@ export default function SettingsPage() {
         </Form>
         <s-section heading="Data and privacy">
           <s-paragraph>
-            Plainprofit stores order totals, refunds, and product costs only. It never stores your customers&apos; names, emails, phone numbers, or addresses. Your store&apos;s data is deleted 48 hours after you uninstall the app.
+            Penni stores order totals, refunds, and product costs only. It never stores your customers&apos; names, emails, phone numbers, or addresses. Your store&apos;s data is deleted 48 hours after you uninstall the app.
           </s-paragraph>
         </s-section>
       </s-stack>
