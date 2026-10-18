@@ -66,3 +66,15 @@ In the Partner Dashboard, open **API access requests → Protected customer data
 5. `https://<your-app>.onrender.com/health` stays `ok` while the worker service is running.
 
 The worker and the web service use the same image. The web service sets `DISABLE_EMBEDDED_WORKER=1` so only the worker process polls the queue.
+
+### Background jobs: who runs them
+
+Order import, cost sync, refunds, ad spend and expense recalculation all run as jobs in the `Job` table.
+
+- **Local dev (`shopify app dev`)**: the web process runs the job loop itself (started from `app/entry.server.tsx` on the first request). No separate worker is needed. After a Vite server reload the loop is restarted, so jobs never run against a stale module.
+- **Production (Render)**: the web service sets `DISABLE_EMBEDDED_WORKER=1` and the `profit-dashboard-worker` service runs `node build/worker.js`. **If the worker service is not running, new installs never import orders.** The worker needs the same `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET` and `SHOPIFY_APP_URL` values as the web service.
+- Running on a single instance without a worker? Leave `DISABLE_EMBEDDED_WORKER` unset on the web service and it processes jobs inline.
+
+### Billing
+
+`BILLING_MODE=manual_raw` matches **Manual pricing** in the Partner Dashboard (Distribution → Pricing). Charges are created as test charges outside production, and on development stores in production too (Shopify only allows test charges there; app reviewers use development stores). Set `BILLING_TEST=1` to force test charges everywhere.

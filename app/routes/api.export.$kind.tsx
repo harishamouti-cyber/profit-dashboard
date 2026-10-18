@@ -3,10 +3,12 @@ import db from "../db.server";
 import { D } from "../lib/money";
 import { getPlanLimits } from "../lib/plan.server";
 import { requireShop } from "../lib/shop.server";
-import { fromDbDate, presetRange, todayInZone, toDbDate } from "../lib/tz";
+import { fromDbDate, safeRange, todayInZone, toDbDate } from "../lib/tz";
 
 function csvEscape(value: string | number): string {
-  const text = String(value);
+  let text = String(value);
+  // Block spreadsheet formula injection from product titles; plain numbers stay as-is.
+  if (/^[=+\-@\t\r]/.test(text) && !/^-?\d+(\.\d+)?$/.test(text)) text = `'${text}`;
   if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
   return text;
 }
@@ -18,9 +20,11 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   }
   const url = new URL(request.url);
   const today = todayInZone(shop.ianaTimezone);
-  const fallback = presetRange("30d", today);
-  const from = url.searchParams.get("from") ?? fallback.from;
-  const to = url.searchParams.get("to") ?? today;
+  // Invalid or missing dates fall back to the last 30 days instead of crashing the query.
+  const { from, to } = safeRange(
+    { preset: url.searchParams.get("preset"), from: url.searchParams.get("from"), to: url.searchParams.get("to") },
+    today,
+  );
   const kind = params.kind;
   if (kind === "pnl") {
     const rows = await db.dailyMetric.findMany({
@@ -44,7 +48,10 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     const rows = await db.productDailyMetric.findMany({
       where: { shopId: shop.id, date: { gte: toDbDate(from), lte: toDbDate(to) } },
     });
-    const header = ["product_gid", "units_sold", "units_returned", "net_sales", "cogs", "allocated_fees", "gross_profit"];
+    const variants = await db.variant.findMany({ where: { shopId: shop.id }, select: { productGid: true, productTitle: true } });
+    const titles = new Map<string, string>();
+    for (const variant of variants) if (!titles.has(variant.productGid)) titles.set(variant.productGid, variant.productTitle);
+    const header = ["product", "product_gid", "units_sold", "units_returned", "net_sales", "cogs", "allocated_fees", "gross_profit"];
     const grouped = new Map<string, typeof rows>();
     for (const row of rows) {
       const list = grouped.get(row.productGid) ?? [];
@@ -58,7 +65,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       const profit = list.reduce((acc, row) => acc.plus(D(row.grossProfit)), D(0));
       const sold = list.reduce((acc, row) => acc + row.unitsSold, 0);
       const returned = list.reduce((acc, row) => acc + row.unitsReturned, 0);
-      return [productGid, sold, returned, net.toFixed(2), cogs.toFixed(2), fees.toFixed(2), profit.toFixed(2)].map(csvEscape).join(",");
+      return [titles.get(productGid) ?? "", productGid, sold, returned, net.toFixed(2), cogs.toFixed(2), fees.toFixed(2), profit.toFixed(2)].map(csvEscape).join(",");
     });
     return new Response([header.join(","), ...lines].join("\n"), {
       headers: {

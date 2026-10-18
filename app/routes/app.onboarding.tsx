@@ -3,6 +3,7 @@ import { Form, useActionData, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { SaveToast } from "../components/SaveToast";
 import db from "../db.server";
+import { PageHeader, PremiumPage, RouteErrorBoundary } from "../components/ui";
 import { requireShop } from "../lib/shop.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -45,6 +46,17 @@ export default function Onboarding() {
   const result = useActionData<typeof action>();
   return (
     <s-page heading="Get started">
+      <PremiumPage>
+        <PageHeader
+          eyebrow="Get started"
+          icon="sparkle"
+          title="Set up in about five minutes"
+          subtitle="Four quick steps and your profit numbers are accurate to the cent."
+        />
+        <div className="pd-card" style={{ padding: "14px 18px" }}>
+          <div className="pd-meter-top" style={{ marginBottom: 8 }}><span>{data.doneCount} of {data.steps.length} steps done</span><span>{Math.round((data.doneCount / data.steps.length) * 100)}%</span></div>
+          <div className="pd-bar"><i style={{ width: `${Math.round((data.doneCount / data.steps.length) * 100)}%` }} /></div>
+        </div>
       <s-stack direction="block" gap="base">
         <SaveToast message={result?.message} />
         <s-section heading={`${data.doneCount} of ${data.steps.length} complete`}>
@@ -75,8 +87,11 @@ export default function Onboarding() {
           <s-button type="submit" variant="primary">{data.onboardingDone ? "Onboarding complete" : "Finish onboarding"}</s-button>
         </Form>
       </s-stack>
+      </PremiumPage>
     </s-page>
   );
 }
 
 export const headers: HeadersFunction = (headersArgs) => boundary.headers(headersArgs);
+
+export const ErrorBoundary = RouteErrorBoundary;

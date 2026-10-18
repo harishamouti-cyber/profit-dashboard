@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ProfitChart } from "./ProfitChart.client";
+import { Skeleton } from "./ui";
 
 type ChartComponent = typeof ProfitChart;
 
@@ -20,14 +21,7 @@ export function ProfitChartLoader({
       active = false;
     };
   }, []);
-  if (points.length === 0) return <s-paragraph>No daily totals in this range yet.</s-paragraph>;
-  if (!Chart) {
-    return (
-      <s-stack direction="inline" gap="small-200">
-        <s-spinner accessibilityLabel="Loading chart" />
-        <s-text color="subdued">Loading chart</s-text>
-      </s-stack>
-    );
-  }
+  if (points.length === 0) return <p className="pd-muted">No daily totals in this range yet.</p>;
+  if (!Chart) return <Skeleton height={290} />;
   return <Chart points={points} currency={currency} />;
 }

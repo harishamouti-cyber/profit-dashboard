@@ -245,13 +245,16 @@ async function ensureReconcile() {
 
 export function startWorker(): void {
   if (process.env.VITEST || process.env.DISABLE_EMBEDDED_WORKER === "1") return;
-  const globalState = globalThis as { __profitDashboardWorker?: boolean };
-  if (globalState.__profitDashboardWorker) return;
-  globalState.__profitDashboardWorker = true;
-  setInterval(() => {
-    void pollOnce().catch((error) => console.error("job poll failed", error));
-  }, 2000);
-  setInterval(() => {
-    void ensureReconcile().catch((error) => console.error("reconcile schedule failed", error));
-  }, 15 * 60 * 1000);
+  // In dev, Vite reloads server modules. Timers from the old module keep running against a
+  // closed module runner ("Vite module runner has been closed"), so replace them on every start.
+  const globalState = globalThis as { __profitDashboardWorkerTimers?: ReturnType<typeof setInterval>[] };
+  for (const timer of globalState.__profitDashboardWorkerTimers ?? []) clearInterval(timer);
+  globalState.__profitDashboardWorkerTimers = [
+    setInterval(() => {
+      void pollOnce().catch((error) => console.error("job poll failed", error));
+    }, 2000),
+    setInterval(() => {
+      void ensureReconcile().catch((error) => console.error("reconcile schedule failed", error));
+    }, 15 * 60 * 1000),
+  ];
 }

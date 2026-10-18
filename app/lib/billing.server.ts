@@ -18,7 +18,33 @@ export function billingMode(): BillingMode {
 }
 
 export function isTestCharge(): boolean {
-  return process.env.NODE_ENV !== "production";
+  return process.env.NODE_ENV !== "production" || process.env.BILLING_TEST === "1";
+}
+
+const DEV_STORE_QUERY = `#graphql
+  query BillingShopPlan {
+    shop {
+      plan {
+        partnerDevelopment
+      }
+    }
+  }
+`;
+
+/**
+ * Development stores (including the ones Shopify's app reviewers use) can only accept
+ * test charges, so production charges them in test mode instead of failing.
+ */
+export async function shouldUseTestCharge(admin: AdminClient): Promise<boolean> {
+  if (isTestCharge()) return true;
+  try {
+    const response = await admin.graphql(DEV_STORE_QUERY);
+    const json = (await response.json()) as { data?: { shop?: { plan?: { partnerDevelopment?: boolean } } } };
+    return json.data?.shop?.plan?.partnerDevelopment === true;
+  } catch (error) {
+    console.error("could not read shop plan for billing", error);
+    return false;
+  }
 }
 
 /** Hosted plan-selection page used when BILLING_MODE=shopify_app_pricing. */
@@ -47,7 +73,7 @@ export async function createSubscriptionRaw(
       name: plan.label,
       price: plan.amount,
       returnUrl,
-      test: isTestCharge(),
+      test: await shouldUseTestCharge(admin),
       trialDays: 7,
     },
   });

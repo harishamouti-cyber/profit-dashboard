@@ -138,7 +138,18 @@ export async function handleBulkFinish(admin: AdminClient, shopDomain: string, b
   const operation = status.node;
   if (!operation) return;
   const url = operation.url ?? operation.partialDataUrl;
-  if (!url || operation.status === "FAILED" && !operation.partialDataUrl) {
+  // Shopify returns no url when a completed bulk query matched nothing (for example a new store
+  // with no orders). That is a successful, empty sync, not a failure.
+  if (!url && operation.status === "COMPLETED") {
+    if (syncJob) {
+      await db.syncJob.update({
+        where: { id: syncJob.id },
+        data: { status: "COMPLETED", objectCount: 0, error: null, finishedAt: new Date() },
+      });
+    }
+    return;
+  }
+  if (!url || (operation.status === "FAILED" && !operation.partialDataUrl)) {
     if (syncJob) {
       await db.syncJob.update({
         where: { id: syncJob.id },

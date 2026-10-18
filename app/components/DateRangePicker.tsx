@@ -1,37 +1,44 @@
-import { useNavigate } from "react-router";
+import { Form, Link, useSearchParams } from "react-router";
+import { Icon } from "./ui";
 
 const PRESETS = [
   ["today", "Today"],
   ["yesterday", "Yesterday"],
-  ["7d", "7d"],
-  ["30d", "30d"],
-  ["mtd", "MTD"],
+  ["7d", "7 days"],
+  ["30d", "30 days"],
+  ["mtd", "Month to date"],
   ["last_month", "Last month"],
 ] as const;
 
+/** Segmented presets plus a compact custom range. Other query params (search, sort) are kept. */
 export function DateRangePicker({ from, to }: { from: string; to: string }) {
-  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const active = params.get("preset") ?? (params.get("from") || params.get("to") ? "" : "30d");
+  const keep = [...params.entries()].filter(([key]) => key !== "preset" && key !== "from" && key !== "to");
+  const hrefFor = (preset: string) => {
+    const next = new URLSearchParams(keep);
+    next.set("preset", preset);
+    return `?${next.toString()}`;
+  };
   return (
-    <s-stack direction="block" gap="base">
-      <s-button-group>
+    <div className="pd-range">
+      <nav className="pd-seg" aria-label="Date range">
         {PRESETS.map(([preset, label]) => (
-          <s-button key={preset} href={`?preset=${preset}`} variant="tertiary">
+          <Link key={preset} to={hrefFor(preset)} className={active === preset ? "on" : ""} preventScrollReset>
             {label}
-          </s-button>
+          </Link>
         ))}
-      </s-button-group>
-      <s-date-picker
-        type="range"
-        name="range"
-        value={`${from}--${to}`}
-        onChange={(event) => {
-          const value = event.currentTarget.value ?? "";
-          const [start, end] = value.split("--");
-          if (start && end && !end.endsWith("-") && end.length >= 10) {
-            navigate(`?from=${start}&to=${end.slice(0, 10)}`);
-          }
-        }}
-      />
-    </s-stack>
+      </nav>
+      <Form method="get" className="pd-dates" key={`${from}-${to}`} preventScrollReset>
+        {keep.map(([key, value]) => (
+          <input key={key} type="hidden" name={key} value={value} />
+        ))}
+        <Icon name="calendar" size={14} />
+        <input className="pd-input" type="date" name="from" defaultValue={from} max={to} aria-label="From" required />
+        <span>→</span>
+        <input className="pd-input" type="date" name="to" defaultValue={to} aria-label="To" required />
+        <button type="submit" className="pd-btn dark sm">Apply</button>
+      </Form>
+    </div>
   );
 }

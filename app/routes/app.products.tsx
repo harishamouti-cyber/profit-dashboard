@@ -1,7 +1,9 @@
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Form, useLoaderData, useSearchParams } from "react-router";
+import { Form, Link, useLoaderData, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import { DateRangePicker } from "../components/DateRangePicker";
 import { EmptyState } from "../components/EmptyState";
+import { Alert, Card, ExportButton, Icon, PageHeader, Pill, PremiumPage, RouteErrorBoundary } from "../components/ui";
 import db from "../db.server";
 import { D, fmt, fmtRatio } from "../lib/money";
 import { getPlanLimits } from "../lib/plan.server";
@@ -59,6 +61,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     fees: fmt(row.fees, shop.currencyCode),
     grossProfit: fmt(row.grossProfit, shop.currencyCode),
     grossProfitRaw: row.grossProfit.toString(),
+    negative: row.grossProfit.isNegative(),
     marginValue: row.netSales.isZero() ? null : row.grossProfit.div(row.netSales),
     margin: fmtRatio(row.netSales.isZero() ? null : row.grossProfit.div(row.netSales)),
     covered: row.cogs.gt(0) || row.unitsSold === 0,
@@ -89,6 +92,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     sort,
     currency: shop.currencyCode,
     variantCount: variants.length,
+    plan: shop.plan,
+    totalProducts: products.length,
+    totals: {
+      units: products.reduce((count, product) => count + product.unitsSold, 0),
+      missing: products.filter((product) => !product.covered).length,
+    },
   };
 };
 
@@ -97,84 +106,140 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   return null;
 };
 
+const SORTS = [
+  ["profit_desc", "Most profit"],
+  ["profit_asc", "Least profit"],
+  ["margin_desc", "Best margin"],
+  ["margin_asc", "Worst margin"],
+] as const;
+
 export default function Products() {
   const data = useLoaderData<typeof loader>();
   const [params] = useSearchParams();
+  const q = params.get("q") ?? "";
+  const sortHref = (sort: string) => {
+    const next = new URLSearchParams(params);
+    next.set("sort", sort);
+    return `?${next.toString()}`;
+  };
+  const exportHref = `/api/export/products?from=${data.from}&to=${data.to}`;
   return (
     <s-page heading="Product profit">
-      <s-stack direction="block" gap="base">
-        <s-paragraph>
-          Ad spend and expenses are not allocated to products. Fees are split inside each order by ex-tax line net sales. Amounts are in {data.currency}.
-        </s-paragraph>
-        <Form method="get">
-          <input type="hidden" name="from" value={data.from} />
-          <input type="hidden" name="to" value={data.to} />
-          <input type="hidden" name="sort" value={data.sort} />
-          <s-search-field label="Search products" name="q" value={params.get("q") ?? ""} />
-          <s-button type="submit" variant="secondary">Search</s-button>
-        </Form>
-        <s-button-group>
-          <s-button href={`?sort=profit_desc&from=${data.from}&to=${data.to}&q=${params.get("q") ?? ""}`} variant={data.sort === "profit_desc" ? "primary" : "tertiary"}>Profit</s-button>
-          <s-button href={`?sort=profit_asc&from=${data.from}&to=${data.to}&q=${params.get("q") ?? ""}`} variant="tertiary">Lowest profit</s-button>
-          <s-button href={`?sort=margin_desc&from=${data.from}&to=${data.to}&q=${params.get("q") ?? ""}`} variant="tertiary">Margin</s-button>
-          <s-button href={`?sort=margin_asc&from=${data.from}&to=${data.to}&q=${params.get("q") ?? ""}`} variant="tertiary">Lowest margin</s-button>
-        </s-button-group>
+      <PremiumPage>
+        <PageHeader
+          eyebrow="Products"
+          icon="box"
+          title="Which products actually make money"
+          subtitle={`Gross profit per product after COGS and payment fees. Ad spend and expenses are not allocated to products. Amounts in ${data.currency}.`}
+          actions={
+            data.canExport ? (
+              <ExportButton href={exportHref} filename={`product-profit-${data.from}-to-${data.to}.csv`} />
+            ) : (
+              <Link to="/app/billing" className="pd-btn ghost"><Icon name="lock" size={14} />Export on Growth</Link>
+            )
+          }
+        />
+        <DateRangePicker from={data.from} to={data.to} />
+
+        <div className="pd-grid pd-g3">
+          <div className="pd-card pd-kpi sm"><div className="pd-kpi-l">Products sold</div><div className="pd-kpi-v">{data.totalProducts}</div></div>
+          <div className="pd-card pd-kpi sm"><div className="pd-kpi-l">Units sold</div><div className="pd-kpi-v">{data.totals.units}</div></div>
+          <div className="pd-card pd-kpi sm">
+            <div className="pd-kpi-l">Missing a cost</div>
+            <div className="pd-kpi-v" style={{ color: data.totals.missing > 0 ? "var(--warn)" : undefined }}>{data.totals.missing}</div>
+          </div>
+        </div>
+
         {data.hidden > 0 ? (
-          <s-banner tone="info" heading="Starter shows the top 10">
-            <s-paragraph>
-              {data.hidden} more products are hidden. <s-link href="/app/billing">Upgrade</s-link>
-            </s-paragraph>
-          </s-banner>
+          <Alert tone="info" title={`Starter shows your top 10 products`}>
+            {data.hidden} more products are hidden. <Link to="/app/billing">Upgrade to see every product</Link>
+          </Alert>
         ) : null}
-        {data.canExport ? (
-          <s-link href={`/api/export/products?from=${data.from}&to=${data.to}`}>Export CSV</s-link>
-        ) : (
-          <s-paragraph>CSV export is included on Growth and Pro.</s-paragraph>
-        )}
-        {data.products.length === 0 ? (
-          <EmptyState
-            heading="No product sales in this range"
-            icon="product"
-            body={data.variantCount === 0 ? "The catalog has not synced yet. You can still add costs once variants arrive." : "Try another date range, or add costs so the next orders have a margin."}
-            href="/app/costs"
-            action="Add product costs"
-          />
-        ) : null}
-        <s-table>
-          <s-table-header-row>
-            <s-table-header>Product</s-table-header>
-            <s-table-header>Units</s-table-header>
-            <s-table-header>Returned</s-table-header>
-            <s-table-header>Net sales</s-table-header>
-            <s-table-header>COGS</s-table-header>
-            <s-table-header>Fees</s-table-header>
-            <s-table-header>Gross profit</s-table-header>
-            <s-table-header>Margin</s-table-header>
-            <s-table-header>Cost</s-table-header>
-          </s-table-header-row>
-          <s-table-body>
-            {data.products.map((product) => (
-              <s-table-row key={product.productGid}>
-                <s-table-cell>{product.title}</s-table-cell>
-                <s-table-cell>{product.unitsSold}</s-table-cell>
-                <s-table-cell>{product.unitsReturned}</s-table-cell>
-                <s-table-cell>{product.netSales}</s-table-cell>
-                <s-table-cell>{product.cogs}</s-table-cell>
-                <s-table-cell>{product.fees}</s-table-cell>
-                <s-table-cell>{product.grossProfit}</s-table-cell>
-                <s-table-cell>
-                  <s-badge tone={product.marginTone}>{product.marginLabel} {product.margin}</s-badge>
-                </s-table-cell>
-                <s-table-cell>
-                  <s-badge tone={product.covered ? "success" : "warning"}>{product.covered ? "Costed" : "Missing"}</s-badge>
-                </s-table-cell>
-              </s-table-row>
-            ))}
-          </s-table-body>
-        </s-table>
-      </s-stack>
+
+        <Card
+          flush
+          title="Product table"
+          icon="tag"
+          actions={
+            <nav className="pd-seg" aria-label="Sort">
+              {SORTS.map(([value, label]) => (
+                <Link key={value} to={sortHref(value)} className={data.sort === value ? "on" : ""} preventScrollReset>{label}</Link>
+              ))}
+            </nav>
+          }
+        >
+          <div style={{ padding: "14px 22px", borderBottom: "1px solid var(--line)" }}>
+            <Form method="get" className="pd-toolbar">
+              <input type="hidden" name="from" value={data.from} />
+              <input type="hidden" name="to" value={data.to} />
+              <input type="hidden" name="sort" value={data.sort} />
+              <div className="pd-search">
+                <Icon name="search" size={14} />
+                <input className="pd-input" type="search" name="q" defaultValue={q} placeholder="Search products" aria-label="Search products" />
+              </div>
+              <button type="submit" className="pd-btn dark sm">Search</button>
+            </Form>
+          </div>
+          {data.products.length === 0 ? (
+            <EmptyState
+              heading={q ? `No products match "${q}"` : "No product sales in this range"}
+              icon="product"
+              body={
+                data.variantCount === 0
+                  ? "Your catalog is still importing. Products appear here after their first sale."
+                  : q
+                    ? "Try a different search, or clear it to see every product."
+                    : "Try a wider date range, or add costs now so the next orders have a margin."
+              }
+              href={q ? `?from=${data.from}&to=${data.to}&sort=${data.sort}` : "/app/costs"}
+              action={q ? "Clear search" : "Add product costs"}
+            />
+          ) : (
+            <div className="pd-table-wrap">
+              <table className="pd-table">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th className="r">Units</th>
+                    <th className="r">Returned</th>
+                    <th className="r">Net sales</th>
+                    <th className="r">COGS</th>
+                    <th className="r">Fees</th>
+                    <th className="r">Gross profit</th>
+                    <th>Margin</th>
+                    <th>Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.products.map((product) => (
+                    <tr key={product.productGid}>
+                      <td className="strong">{product.title}</td>
+                      <td className="r">{product.unitsSold}</td>
+                      <td className="r pd-muted">{product.unitsReturned}</td>
+                      <td className="r">{product.netSales}</td>
+                      <td className="r pd-muted">{product.cogs}</td>
+                      <td className="r pd-muted">{product.fees}</td>
+                      <td className={`r ${product.negative ? "pd-neg" : "strong"}`}>{product.grossProfit}</td>
+                      <td><Pill tone={product.marginTone}>{product.marginLabel} {product.margin}</Pill></td>
+                      <td>
+                        {product.covered ? (
+                          <Pill tone="success">Costed</Pill>
+                        ) : (
+                          <Link to={`/app/costs?q=${encodeURIComponent(product.title)}`}><Pill tone="warning">Add cost</Pill></Link>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      </PremiumPage>
     </s-page>
   );
 }
+
+export const ErrorBoundary = RouteErrorBoundary;
 
 export const headers: HeadersFunction = (headersArgs) => boundary.headers(headersArgs);

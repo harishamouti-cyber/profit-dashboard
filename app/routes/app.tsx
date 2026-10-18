@@ -1,12 +1,18 @@
 import { useEffect } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Outlet, useLoaderData, useNavigation, useRouteError } from "react-router";
+import { Outlet, useLoaderData, useNavigation } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
+import { RouteErrorBoundary } from "../components/ui";
 import { requireFreshShop } from "../lib/shop.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { shop } = await requireFreshShop(request);
+  const { shop, redirect } = await requireFreshShop(request);
+  // No active subscription (new install, reinstall, or cancelled): send the merchant to choose a plan.
+  const path = new URL(request.url).pathname;
+  if (shop.plan === "NONE" && !path.startsWith("/app/billing") && typeof redirect === "function") {
+    throw redirect("/app/billing");
+  }
   return {
     apiKey: process.env.SHOPIFY_API_KEY || "",
     plan: shop.plan,
@@ -39,9 +45,7 @@ export default function App() {
   );
 }
 
-export function ErrorBoundary() {
-  return boundary.error(useRouteError());
-}
+export const ErrorBoundary = RouteErrorBoundary;
 
 export const headers: HeadersFunction = (headersArgs) => {
   return boundary.headers(headersArgs);

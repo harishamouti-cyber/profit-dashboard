@@ -37,7 +37,12 @@ const shopify = shopifyApp({
   hooks: {
     afterAuth: async ({ session, admin }) => {
       const { bootstrapShop } = await import("./lib/sync/bootstrap.server");
-      await bootstrapShop(admin, session.shop, session.scope);
+      try {
+        await bootstrapShop(admin, session.shop, session.scope);
+      } catch (error) {
+        // Never block the install. loadShop retries the bootstrap on the first page load.
+        console.error(`afterAuth bootstrap failed for ${session.shop}`, error);
+      }
     },
   },
   ...(process.env.SHOP_CUSTOM_DOMAIN

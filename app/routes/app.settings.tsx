@@ -9,6 +9,7 @@ import { enqueue } from "../jobs/queue.server";
 import { parseShippingCsv } from "../lib/csv";
 import { fmt, isMoney } from "../lib/money";
 import { getPlanLimits } from "../lib/plan.server";
+import { PageHeader, PremiumPage, RouteErrorBoundary } from "../components/ui";
 import { requireShop } from "../lib/shop.server";
 import { estimateRuleNote } from "../lib/sync/bootstrap.server";
 
@@ -70,7 +71,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     await enqueue({ shopDomain: shop.shopDomain, type: "recompute_shipping", payload: {} });
     return {
       message: `Saved ${parsed.rows.length} shipping costs.`,
-      errors: parsed.errors.map((error) => `Row ${error.row}: ${error.message}`),
+      errors: parsed.errors.slice(0, 20).map((error) => `Row ${error.row}: ${error.message}`),
     };
   }
   if (intent === "rule") {
@@ -125,6 +126,13 @@ export default function SettingsPage() {
   const result = useActionData<typeof action>();
   return (
     <s-page heading="Settings">
+      <PremiumPage>
+        <PageHeader
+          eyebrow="Settings"
+          icon="layers"
+          title="Fine-tune how profit is calculated"
+          subtitle={`Payment fees, shipping costs, and sync options. Store time zone ${data.timezone}, currency ${data.currency}.`}
+        />
       <s-stack direction="block" gap="base">
         <SaveToast message={result?.message} errors={result && "errors" in result ? result.errors : []} />
         <s-section heading="Shop">
@@ -206,8 +214,11 @@ export default function SettingsPage() {
           </s-paragraph>
         </s-section>
       </s-stack>
+      </PremiumPage>
     </s-page>
   );
 }
 
 export const headers: HeadersFunction = (headersArgs) => boundary.headers(headersArgs);
+
+export const ErrorBoundary = RouteErrorBoundary;
