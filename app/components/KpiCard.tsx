@@ -28,8 +28,9 @@ export function KpiCard({
   small?: boolean;
 }) {
   const shown: DeltaTone = invert ? (tone === "success" ? "critical" : tone === "critical" ? "success" : tone) : tone;
-  const up = delta?.startsWith("+") || delta === "New";
-  const down = delta?.startsWith("-");
+  // Arrow follows the raw direction; `invert` only changes the color.
+  const up = tone === "success";
+  const down = tone === "critical";
   return (
     <div className={`pd-card lift pd-kpi${featured ? " feat" : ""}${small ? " sm" : ""}`}>
       <div className="pd-kpi-l">
