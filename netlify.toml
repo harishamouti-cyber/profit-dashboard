@@ -12,3 +12,11 @@
   # Prisma's query engine is a native file the bundler cannot trace; ship it with every function.
   included_files = ["node_modules/.prisma/client/*.node", "node_modules/.prisma/client/schema.prisma"]
   external_node_modules = ["@prisma/client", ".prisma"]
+
+# App Store screencast: a static file in build/client, served by the CDN (never the SSR function).
+[[headers]]
+  for = "/penni-demo.mp4"
+  [headers.values]
+    Content-Type = "video/mp4"
+    Cache-Control = "public, max-age=3600"
+    Accept-Ranges = "bytes"
